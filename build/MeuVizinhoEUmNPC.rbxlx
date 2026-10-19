@@ -1,0 +1,4141 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="Folder" referent="2">
+        <Properties>
+          <string name="Name">Config</string>
+        </Properties>
+        <Item class="ModuleScript" referent="3">
+          <Properties>
+            <string name="Name">AssetConfig</string>
+            <string name="Source"><![CDATA[--!strict
+-- IDs de assets externos. Se algum ID falhar ao carregar, o jogo continua funcionando:
+-- o NPC apenas anda sem animação.
+--
+-- Estas são as animações R15 padrão da própria Roblox (as mesmas do script "Animate" que todo
+-- jogador recebe). Mantê-las iguais para NPCs e jogadores evita que a animação denuncie quem é NPC.
+-- Áudios entram na Fase 3.
+
+return {
+	Animations = {
+		Idle = "rbxassetid://507766388",
+		Walk = "rbxassetid://507777826",
+		Run = "rbxassetid://507767714",
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="4">
+          <Properties>
+            <string name="Name">CharacterConfig</string>
+            <string name="Source"><![CDATA[--!strict
+-- Moradores do bairro. Cada campo é independente: aparência (Appearance), personalidade
+-- (Personality), rotina (RoutineType -> RoutineConfig), falas (DialoguePool) e missões (MissionPool).
+--
+-- APARÊNCIA PROVISÓRIA: os quatro personagens principais usam pele amarela clássica do Roblox
+-- e cores de roupa distintas só até as imagens de referência chegarem. Para aplicar a aparência
+-- real, preencha Appearance (cores) e Appearance.Description com IDs do catálogo, por exemplo:
+--   Description = { Shirt = 123, Pants = 456, HairAccessory = "789,1011", Face = 1213 }
+-- Qualquer propriedade de HumanoidDescription vale (escalas, acessórios, partes do corpo).
+-- O mesmo HumanoidDescription é usado no NPC e no jogador disfarçado, então os dois ficam iguais.
+--
+-- SuspicionTraits são etiquetas de comportamento que a Fase 2 usa para gerar pistas.
+
+export type Personality = {
+	Sociability: number, -- 0..1 (Fase 2: puxa conversa)
+	Curiosity: number, -- 0..1 (Fase 2: investiga eventos)
+	Punctuality: number, -- 0..1: quanto segue a sequência da rotina
+	Energy: number, -- 0..1: quanto tempo fica parado em cada lugar
+}
+
+export type Appearance = {
+	SkinColor: Color3,
+	ShirtColor: Color3, -- tronco
+	PantsColor: Color3, -- pernas
+	ArmColor: Color3?, -- nil = cor da pele (manga curta)
+	Description: { [string]: any },
+}
+
+export type Character = {
+	CharacterId: string,
+	DisplayName: string,
+	ModelName: string,
+	IsMain: boolean,
+	HomeId: string,
+	WorkPoi: string?,
+	WalkSpeed: number,
+	Personality: Personality,
+	RoutineType: string,
+	DialoguePool: { Greeting: { string } }?,
+	SuspicionTraits: { string },
+	MissionPool: { string }?, -- nil = todas as missões permitidas
+	AnimationConfig: { [string]: string }, -- sobrescreve AssetConfig.Animations só neste NPC
+	Appearance: Appearance,
+}
+
+local function rgb(r: number, g: number, b: number): Color3
+	return Color3.fromRGB(r, g, b)
+end
+
+local PLACEHOLDER_SKIN = rgb(245, 205, 48)
+
+local list: { Character } = {
+	-- Personagens principais (PLACEHOLDER até receber as referências visuais)
+	{
+		CharacterId = "Yuri22",
+		DisplayName = "Yuri22",
+		ModelName = "Yuri22",
+		IsMain = true,
+		HomeId = "CasaYuri22",
+		WalkSpeed = 13,
+		Personality = { Sociability = 0.7, Curiosity = 0.8, Punctuality = 0.35, Energy = 0.9 },
+		RoutineType = "Imprevisivel",
+		DialoguePool = {
+			Greeting = {
+				"Opa! Eu ia pro Mercado... ou era pra Praça? Enfim, oi!",
+				"E aí, vizinho! Tudo tranquilo por aqui?",
+				"Psiu... tô de olho em uns moradores meio estranhos.",
+			},
+		},
+		SuspicionTraits = { "MudaDeIdeia", "ParaDeRepente" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = PLACEHOLDER_SKIN,
+			ShirtColor = rgb(214, 48, 49),
+			PantsColor = rgb(45, 52, 54),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "Dona",
+		DisplayName = "Dona",
+		ModelName = "Dona",
+		IsMain = true,
+		HomeId = "CasaDona",
+		WalkSpeed = 11,
+		Personality = { Sociability = 0.9, Curiosity = 0.9, Punctuality = 0.6, Energy = 0.6 },
+		RoutineType = "Social",
+		DialoguePool = {
+			Greeting = {
+				"Ai, que susto! Chega de mansinho assim não!",
+				"Eu vi tudo, viu? Tu-do!",
+				"Bom dia, vizinho! Já regou as plantas hoje?",
+			},
+		},
+		SuspicionTraits = { "ObservaOsOutros", "VisitaVizinhos" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = PLACEHOLDER_SKIN,
+			ShirtColor = rgb(142, 68, 173),
+			PantsColor = rgb(52, 73, 94),
+			ArmColor = rgb(142, 68, 173),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "Muriloso",
+		DisplayName = "Muriloso",
+		ModelName = "Muriloso",
+		IsMain = true,
+		HomeId = "CasaMuriloso",
+		WalkSpeed = 11,
+		Personality = { Sociability = 0.8, Curiosity = 0.5, Punctuality = 0.5, Energy = 0.4 },
+		RoutineType = "Passeador",
+		DialoguePool = {
+			Greeting = {
+				"Fala, vizinho! Dia bonito pra não fazer nada, né?",
+				"Relaxa, aqui no bairro tudo se resolve.",
+				"Opa, beleza? Tô indo ali e já volto.",
+			},
+		},
+		SuspicionTraits = { "FicaMuitoTempo", "AndaSemPressa" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = PLACEHOLDER_SKIN,
+			ShirtColor = rgb(39, 174, 96),
+			PantsColor = rgb(160, 140, 100),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "TioSam",
+		DisplayName = "Tio Sam",
+		ModelName = "TioSam",
+		IsMain = true,
+		HomeId = "CasaTioSam",
+		WorkPoi = "Mercado",
+		WalkSpeed = 12,
+		Personality = { Sociability = 0.6, Curiosity = 0.4, Punctuality = 0.9, Energy = 0.7 },
+		RoutineType = "Trabalhador",
+		DialoguePool = {
+			-- Falas provisórias: troque pelas falas características reais do personagem.
+			Greeting = {
+				"Ô, sobrinho! Chegou na hora certa.",
+				"No meu tempo o bairro era bem mais calmo...",
+				"Tenho tarefa pra fazer, mas antes: bom dia!",
+			},
+		},
+		SuspicionTraits = { "RotinaFixa", "HorarioCerto" },
+		MissionPool = { "Entrega", "Papo", "Passeio", "Achados" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = PLACEHOLDER_SKIN,
+			ShirtColor = rgb(41, 128, 185),
+			PantsColor = rgb(236, 240, 241),
+			ArmColor = rgb(41, 128, 185),
+			Description = {},
+		},
+	},
+
+	-- Moradores secundários (fictícios)
+	{
+		CharacterId = "SeuZe",
+		DisplayName = "Seu Zé",
+		ModelName = "SeuZe",
+		IsMain = false,
+		HomeId = "CasaAmarela",
+		WalkSpeed = 10,
+		Personality = { Sociability = 0.5, Curiosity = 0.6, Punctuality = 0.85, Energy = 0.3 },
+		RoutineType = "Caseiro",
+		SuspicionTraits = { "RotinaFixa", "FicaMuitoTempo" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(234, 184, 146),
+			ShirtColor = rgb(230, 126, 34),
+			PantsColor = rgb(93, 64, 55),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "VoNena",
+		DisplayName = "Vó Nena",
+		ModelName = "VoNena",
+		IsMain = false,
+		HomeId = "CasaAmarela",
+		WalkSpeed = 10,
+		Personality = { Sociability = 0.7, Curiosity = 0.7, Punctuality = 0.9, Energy = 0.25 },
+		RoutineType = "Caseiro",
+		SuspicionTraits = { "RotinaFixa", "AndaSemPressa" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(141, 85, 36),
+			ShirtColor = rgb(232, 67, 147),
+			PantsColor = rgb(99, 110, 114),
+			ArmColor = rgb(232, 67, 147),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "DonaCida",
+		DisplayName = "Dona Cida",
+		ModelName = "DonaCida",
+		IsMain = false,
+		HomeId = "CasaVerde",
+		WalkSpeed = 10,
+		Personality = { Sociability = 0.95, Curiosity = 0.85, Punctuality = 0.55, Energy = 0.5 },
+		RoutineType = "Social",
+		SuspicionTraits = { "VisitaVizinhos", "ObservaOsOutros" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(198, 134, 66),
+			ShirtColor = rgb(253, 203, 110),
+			PantsColor = rgb(108, 92, 231),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "Bia",
+		DisplayName = "Bia",
+		ModelName = "Bia",
+		IsMain = false,
+		HomeId = "CasaAzul",
+		WalkSpeed = 13,
+		Personality = { Sociability = 0.5, Curiosity = 0.4, Punctuality = 0.7, Energy = 0.95 },
+		RoutineType = "Passeador",
+		SuspicionTraits = { "SempreComPressa" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(255, 220, 177),
+			ShirtColor = rgb(0, 206, 201),
+			PantsColor = rgb(45, 52, 54),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "Rafa",
+		DisplayName = "Rafa",
+		ModelName = "Rafa",
+		IsMain = false,
+		HomeId = "CasaAzul",
+		WalkSpeed = 12,
+		Personality = { Sociability = 0.6, Curiosity = 0.6, Punctuality = 0.5, Energy = 0.7 },
+		RoutineType = "Passeador",
+		SuspicionTraits = { "ParaParaObservar" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(224, 172, 105),
+			ShirtColor = rgb(9, 132, 227),
+			PantsColor = rgb(178, 190, 195),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "Carlinhos",
+		DisplayName = "Carlinhos",
+		ModelName = "Carlinhos",
+		IsMain = false,
+		HomeId = "CasaRosa",
+		WalkSpeed = 14,
+		Personality = { Sociability = 0.8, Curiosity = 0.95, Punctuality = 0.2, Energy = 1 },
+		RoutineType = "Imprevisivel",
+		SuspicionTraits = { "MudaDeIdeia", "SempreComPressa" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(255, 205, 148),
+			ShirtColor = rgb(225, 112, 85),
+			PantsColor = rgb(9, 132, 227),
+			Description = { HeightScale = 0.9 },
+		},
+	},
+	{
+		CharacterId = "Lucia",
+		DisplayName = "Lúcia",
+		ModelName = "Lucia",
+		IsMain = false,
+		HomeId = "CasaRosa",
+		WorkPoi = "Mercado",
+		WalkSpeed = 12,
+		Personality = { Sociability = 0.6, Curiosity = 0.3, Punctuality = 0.95, Energy = 0.6 },
+		RoutineType = "Trabalhador",
+		SuspicionTraits = { "RotinaFixa", "HorarioCerto" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(141, 85, 36),
+			ShirtColor = rgb(214, 48, 49),
+			PantsColor = rgb(45, 52, 54),
+			ArmColor = rgb(214, 48, 49),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "Jorginho",
+		DisplayName = "Jorginho",
+		ModelName = "Jorginho",
+		IsMain = false,
+		HomeId = "CasaLaranja",
+		WorkPoi = "Lanchonete",
+		WalkSpeed = 11,
+		Personality = { Sociability = 0.7, Curiosity = 0.4, Punctuality = 0.8, Energy = 0.5 },
+		RoutineType = "Trabalhador",
+		SuspicionTraits = { "RotinaFixa", "FicaMuitoTempo" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(234, 184, 146),
+			ShirtColor = rgb(255, 255, 255),
+			PantsColor = rgb(45, 52, 54),
+			ArmColor = rgb(255, 255, 255),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "Toninho",
+		DisplayName = "Toninho",
+		ModelName = "Toninho",
+		IsMain = false,
+		HomeId = "CasaLilas",
+		WalkSpeed = 11,
+		Personality = { Sociability = 0.9, Curiosity = 0.7, Punctuality = 0.45, Energy = 0.55 },
+		RoutineType = "Social",
+		SuspicionTraits = { "VisitaVizinhos", "ParaDeRepente" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(198, 134, 66),
+			ShirtColor = rgb(0, 184, 148),
+			PantsColor = rgb(99, 110, 114),
+			Description = {},
+		},
+	},
+	{
+		CharacterId = "Mel",
+		DisplayName = "Mel",
+		ModelName = "Mel",
+		IsMain = false,
+		HomeId = "CasaLilas",
+		WalkSpeed = 12,
+		Personality = { Sociability = 0.65, Curiosity = 0.9, Punctuality = 0.3, Energy = 0.8 },
+		RoutineType = "Imprevisivel",
+		SuspicionTraits = { "MudaDeIdeia", "ParaParaObservar" },
+		AnimationConfig = {},
+		Appearance = {
+			SkinColor = rgb(255, 220, 177),
+			ShirtColor = rgb(162, 155, 254),
+			PantsColor = rgb(45, 52, 54),
+			ArmColor = rgb(162, 155, 254),
+			Description = {},
+		},
+	},
+}
+
+-- Falas usadas por quem não tem DialoguePool próprio
+local DefaultDialogue = {
+	Greeting = {
+		"Oi, vizinho! Tudo bem?",
+		"Bom dia! Ou boa tarde... perdi a noção da hora.",
+		"Opa! Tava indo ali resolver umas coisas.",
+		"Olá! Viu alguma coisa estranha por aí?",
+	},
+}
+
+local byId: { [string]: Character } = {}
+for _, character in list do
+	byId[character.CharacterId] = character
+end
+
+return {
+	List = list,
+	ById = byId,
+	DefaultDialogue = DefaultDialogue,
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="5">
+          <Properties>
+            <string name="Name">GameConfig</string>
+            <string name="Source"><![CDATA[--!strict
+-- Regras gerais da partida. Altere aqui sem mexer na lógica.
+
+local GameConfig = {
+	-- Jogadores
+	MinPlayers = 1, -- 1 permite testar sozinho; para o jogo publicado use 3 ou mais
+	MaxParticipants = 10, -- jogadores por partida (os demais esperam no lobby)
+
+	-- Tempos (segundos)
+	IntermissionTime = 15,
+	RoundDuration = 420, -- 7 minutos (recomendado entre 360 e 480)
+	ResultsTime = 15,
+	RespawnDelay = 3,
+
+	-- Moradores (jogadores disfarçados + NPCs)
+	TargetResidents = 10, -- total desejado de moradores no bairro
+	MinNPCs = 4,
+	MaxActiveNPCs = 10, -- limite de NPCs ativos ao mesmo tempo
+	NPCReturnHomeTime = 45, -- nos últimos N segundos os NPCs voltam para casa
+	NPCNearPlayerDistance = 120, -- NPCs mais longe que isso de qualquer jogador atualizam com menos frequência
+
+	-- Missões
+	MissionsPerPlayer = 3,
+
+	-- Recompensas em Fichas do Bairro (concedidas só no fim da rodada)
+	ParticipationReward = 10,
+	AllMissionsBonus = 25,
+	MaxGrantPerRound = 500, -- trava de segurança do EconomyService
+
+	-- Interações (validadas no servidor)
+	InteractionMaxDistance = 12,
+	InteractionCooldown = 0.4,
+	TalkCooldownPerTarget = 6,
+
+	-- Debug: defina um número para repetir exatamente a mesma partida
+	FixedSeed = nil :: number?,
+}
+
+return GameConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="6">
+          <Properties>
+            <string name="Name">MapConfig</string>
+            <string name="Source"><![CDATA[--!strict
+-- Layout do bairro (gerado por MapService ao iniciar o servidor).
+-- Grade 3x3 de quarteirões de 96 studs separados por ruas de 16 studs, com um anel de rua externo.
+-- Para mover algo, altere a posição aqui; o MapService reconstrói tudo a partir destes dados.
+--
+--            NW: Lanchonete + Casa Laranja | N: Mercado        | NE: Casa do Yuri22 + Casa Verde
+--            W:  Casa da Dona + Amarela     | Centro: Praça     | E:  Casa do Muriloso + Azul
+--            SW: Parque                     | S: Ônibus + Tio Sam | SE: Casa Rosa + Casa Lilás
+-- (Norte = -Z, Sul = +Z, Leste = +X, Oeste = -X)
+
+export type Stand = {
+	Offset: Vector3?, -- deslocamento do centro da área onde os moradores param
+	Radius: number,
+	MinRadius: number?, -- usado para não parar dentro de obstáculos centrais (ex.: chafariz)
+}
+
+export type Poi = {
+	Id: string,
+	DisplayName: string,
+	Kind: string, -- "Public" | "House"
+	Building: string, -- "Plaza" | "Market" | "Diner" | "Park" | "BusStop" | "House"
+	Position: Vector3, -- centro da zona (para casas: a varanda)
+	Facing: Vector3?, -- direção da fachada
+	ZoneRadius: number, -- raio (horizontal) que conta como "estar no local"
+	Stand: Stand,
+	Size: Vector3?, -- prédios abertos (Market/Diner)
+	Color: Color3?,
+	RoofColor: Color3?,
+}
+
+export type Spot = {
+	Id: string,
+	DisplayName: string,
+	Kind: string, -- "Bush" | "Trash" | "Crates"
+	Position: Vector3,
+	Area: string, -- dica de área usada pela missão "Achados e perdidos"
+}
+
+local GROUND_TOP = 1
+local BLOCK_TOP = 1.5
+
+local NORTH = Vector3.new(0, 0, -1)
+local SOUTH = Vector3.new(0, 0, 1)
+local EAST = Vector3.new(1, 0, 0)
+local WEST = Vector3.new(-1, 0, 0)
+
+local function at(x: number, z: number): Vector3
+	return Vector3.new(x, BLOCK_TOP, z)
+end
+
+local function house(id: string, name: string, x: number, z: number, facing: Vector3, color: Color3): Poi
+	return {
+		Id = id,
+		DisplayName = name,
+		Kind = "House",
+		Building = "House",
+		Position = at(x, z),
+		Facing = facing,
+		ZoneRadius = 9,
+		Stand = { Radius = 3 },
+		Color = color,
+		RoofColor = Color3.fromRGB(120, 62, 52),
+	}
+end
+
+local Pois: { Poi } = {
+	{
+		Id = "Praca",
+		DisplayName = "Praça Central",
+		Kind = "Public",
+		Building = "Plaza",
+		Position = at(0, 0),
+		ZoneRadius = 30,
+		Stand = { Radius = 22, MinRadius = 11 },
+	},
+	{
+		Id = "Mercado",
+		DisplayName = "Mercado",
+		Kind = "Public",
+		Building = "Market",
+		Position = at(0, -86),
+		Facing = SOUTH,
+		ZoneRadius = 22,
+		Stand = { Radius = 6 },
+		Size = Vector3.new(40, 12, 24),
+		Color = Color3.fromRGB(46, 204, 113),
+		RoofColor = Color3.fromRGB(39, 174, 96),
+	},
+	{
+		Id = "Lanchonete",
+		DisplayName = "Lanchonete",
+		Kind = "Public",
+		Building = "Diner",
+		Position = at(-128, -86),
+		Facing = SOUTH,
+		ZoneRadius = 20,
+		Stand = { Radius = 5 },
+		Size = Vector3.new(32, 11, 22),
+		Color = Color3.fromRGB(231, 76, 60),
+		RoofColor = Color3.fromRGB(241, 196, 15),
+	},
+	{
+		Id = "Parque",
+		DisplayName = "Parque",
+		Kind = "Public",
+		Building = "Park",
+		Position = at(-112, 112),
+		ZoneRadius = 40,
+		Stand = { Radius = 20 },
+	},
+	{
+		Id = "PontoOnibus",
+		DisplayName = "Ponto de Ônibus",
+		Kind = "Public",
+		Building = "BusStop",
+		Position = at(-24, 73),
+		Facing = NORTH,
+		ZoneRadius = 12,
+		Stand = { Radius = 2.5 },
+		Color = Color3.fromRGB(52, 152, 219),
+	},
+
+	house("CasaYuri22", "Casa do Yuri22", 90, -74, SOUTH, Color3.fromRGB(231, 112, 104)),
+	house("CasaVerde", "Casa Verde", 134, -74, SOUTH, Color3.fromRGB(129, 199, 132)),
+	house("CasaLaranja", "Casa Laranja", -88, -74, SOUTH, Color3.fromRGB(255, 167, 38)),
+	house("CasaDona", "Casa da Dona", -74, -20, EAST, Color3.fromRGB(186, 104, 200)),
+	house("CasaAmarela", "Casa Amarela", -74, 20, EAST, Color3.fromRGB(255, 213, 79)),
+	house("CasaMuriloso", "Casa do Muriloso", 74, -20, WEST, Color3.fromRGB(102, 187, 106)),
+	house("CasaAzul", "Casa Azul", 74, 20, WEST, Color3.fromRGB(100, 181, 246)),
+	house("CasaTioSam", "Casa do Tio Sam", 24, 74, NORTH, Color3.fromRGB(66, 133, 244)),
+	house("CasaRosa", "Casa Rosa", 90, 74, NORTH, Color3.fromRGB(244, 143, 177)),
+	house("CasaLilas", "Casa Lilás", 134, 74, NORTH, Color3.fromRGB(179, 157, 219)),
+}
+
+local Spots: { Spot } = {
+	{ Id = "PracaArbusto", DisplayName = "Arbusto", Kind = "Bush", Position = at(-38, 22), Area = "na Praça" },
+	{ Id = "PracaLixeira", DisplayName = "Lixeira", Kind = "Trash", Position = at(38, -22), Area = "na Praça" },
+	{ Id = "ParqueArbusto1", DisplayName = "Arbusto", Kind = "Bush", Position = at(-148, 100), Area = "no Parque" },
+	{ Id = "ParqueArbusto2", DisplayName = "Arbusto", Kind = "Bush", Position = at(-80, 150), Area = "no Parque" },
+	{ Id = "ParqueLixeira", DisplayName = "Lixeira", Kind = "Trash", Position = at(-80, 76), Area = "no Parque" },
+	{ Id = "MercadoCaixotes", DisplayName = "Caixotes", Kind = "Crates", Position = at(-34, -90), Area = "perto do Mercado" },
+	{ Id = "MercadoLixeira", DisplayName = "Lixeira", Kind = "Trash", Position = at(-28, -74), Area = "perto do Mercado" },
+	{ Id = "LanchoneteLixeira", DisplayName = "Lixeira", Kind = "Trash", Position = at(-104, -76), Area = "perto da Lanchonete" },
+	{ Id = "LanchoneteCaixotes", DisplayName = "Caixotes", Kind = "Crates", Position = at(-150, -90), Area = "perto da Lanchonete" },
+	{ Id = "OnibusLixeira", DisplayName = "Lixeira", Kind = "Trash", Position = at(-38, 74), Area = "no Ponto de Ônibus" },
+	{ Id = "OnibusArbusto", DisplayName = "Arbusto", Kind = "Bush", Position = at(-8, 76), Area = "no Ponto de Ônibus" },
+}
+
+return {
+	GroundTop = GROUND_TOP,
+	BlockTop = BLOCK_TOP,
+	BlockSize = 96,
+	BlockPitch = 112, -- quarteirão + rua
+	StreetWidth = 16,
+	SidewalkWidth = 6,
+	MapHalfSize = 184,
+
+	-- Tipo de cada quarteirão da grade 3x3 (índices -1, 0, 1 em X e Z)
+	Blocks = {
+		{ X = 0, Z = 0, Type = "Plaza" },
+		{ X = -1, Z = 1, Type = "Park" },
+		{ X = 0, Z = -1, Type = "Lots" },
+		{ X = 1, Z = -1, Type = "Lots" },
+		{ X = -1, Z = -1, Type = "Lots" },
+		{ X = -1, Z = 0, Type = "Lots" },
+		{ X = 1, Z = 0, Type = "Lots" },
+		{ X = 0, Z = 1, Type = "Lots" },
+		{ X = 1, Z = 1, Type = "Lots" },
+	},
+
+	Pois = Pois,
+	Spots = Spots,
+
+	-- Balcão onde as encomendas da missão "Entrega expressa" são retiradas
+	PackageCounter = at(28, -80),
+
+	Lobby = {
+		Center = Vector3.new(0, 80, -330), -- topo da plataforma
+		Size = 64,
+	},
+
+	Colors = {
+		Asphalt = Color3.fromRGB(72, 72, 78),
+		StreetLine = Color3.fromRGB(255, 214, 10),
+		Sidewalk = Color3.fromRGB(205, 205, 200),
+		Lot = Color3.fromRGB(120, 190, 90),
+		Plaza = Color3.fromRGB(232, 214, 180),
+		Hedge = Color3.fromRGB(46, 125, 50),
+		Trunk = Color3.fromRGB(121, 85, 72),
+		Leaves = Color3.fromRGB(67, 160, 71),
+		Water = Color3.fromRGB(79, 195, 247),
+		Wood = Color3.fromRGB(161, 110, 70),
+		Metal = Color3.fromRGB(96, 125, 139),
+	},
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="7">
+          <Properties>
+            <string name="Name">MissionConfig</string>
+            <string name="Source"><![CDATA[--!strict
+-- Modelos de missão. O servidor sorteia MissionsPerPlayer modelos diferentes por jogador e
+-- preenche os alvos da partida. Conclusão e falha são sempre verificadas no servidor.
+--
+-- Description aceita: {targets} (lista de alvos), {target} (um alvo), {item}, {area},
+-- {seconds}, {radius}. FailText é mostrado no painel de missões.
+-- Regras gerais: missão não concluída quando a rodada termina = falha; se o morador-alvo sair
+-- do jogo, a missão é cancelada (sem recompensa e sem impedir o fim antecipado da rodada).
+
+export type MissionType = "Visit" | "Talk" | "Deliver" | "Find" | "Follow"
+
+export type Template = {
+	Id: string,
+	Title: string,
+	Description: string,
+	Type: MissionType,
+	AllowedRoles: { string }, -- Fase 1 só tem "Morador"; a Fase 2 adiciona Investigador e Imitador
+	Reward: number,
+	TimeLimit: number?, -- segundos após receber; nil = até o fim da rodada
+	FailText: string,
+	Weight: number,
+	-- Parâmetros por tipo
+	Count: number?, -- Visit/Talk: quantidade de alvos
+	PoiKind: string?, -- Visit: "Public" ou "House"
+	Radius: number?, -- Follow: distância máxima em studs
+	Seconds: number?, -- Follow: segundos acumulados perto do alvo
+	Items: { string }?, -- Find: objetos possíveis
+}
+
+local Templates: { Template } = {
+	{
+		Id = "Passeio",
+		Title = "Passeio pelo bairro",
+		Description = "Passe por: {targets}.",
+		Type = "Visit",
+		PoiKind = "Public",
+		Count = 3,
+		AllowedRoles = { "Morador" },
+		Reward = 20,
+		FailText = "Falha se a rodada acabar antes.",
+		Weight = 3,
+	},
+	{
+		Id = "Ronda",
+		Title = "Ronda da vizinhança",
+		Description = "Dê uma passada na frente de: {targets}.",
+		Type = "Visit",
+		PoiKind = "House",
+		Count = 3,
+		AllowedRoles = { "Morador" },
+		Reward = 20,
+		FailText = "Falha se a rodada acabar antes.",
+		Weight = 2,
+	},
+	{
+		Id = "Papo",
+		Title = "Papo de vizinho",
+		Description = "Converse com {targets}.",
+		Type = "Talk",
+		Count = 2,
+		AllowedRoles = { "Morador" },
+		Reward = 25,
+		FailText = "Falha se a rodada acabar antes.",
+		Weight = 3,
+	},
+	{
+		Id = "Entrega",
+		Title = "Entrega expressa",
+		Description = "Retire uma encomenda no balcão do Mercado e deixe na caixa de correio: {target}.",
+		Type = "Deliver",
+		AllowedRoles = { "Morador" },
+		Reward = 30,
+		TimeLimit = 240,
+		FailText = "Falha se passar de 4 minutos.",
+		Weight = 2,
+	},
+	{
+		Id = "Achados",
+		Title = "Achados e perdidos",
+		Description = "Alguém perdeu {item} {area}. Procure nos esconderijos (arbustos, lixeiras, caixotes).",
+		Type = "Find",
+		Items = { "um molho de chaves", "uma carteira", "um par de óculos", "um controle remoto" },
+		AllowedRoles = { "Morador" },
+		Reward = 30,
+		FailText = "Falha se a rodada acabar antes.",
+		Weight = 2,
+	},
+	{
+		Id = "Sombra",
+		Title = "Sombra discreta",
+		Description = "Fique perto de {target} por {seconds} segundos (até {radius} studs de distância).",
+		Type = "Follow",
+		Radius = 18,
+		Seconds = 25,
+		AllowedRoles = { "Morador" },
+		Reward = 30,
+		TimeLimit = 300,
+		FailText = "Falha se passar de 5 minutos.",
+		Weight = 2,
+	},
+}
+
+return {
+	Templates = Templates,
+}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="8">
+          <Properties>
+            <string name="Name">RoutineConfig</string>
+            <string name="Source"><![CDATA[--!strict
+-- Rotinas dos NPCs. Cada passo da sequência é um destino:
+--   "Home" = casa do morador, "Work" = CharacterConfig.WorkPoi, "Neighbor" = casa de outro morador,
+--   ou o Id de um ponto público do MapConfig (Praca, Mercado, Lanchonete, Parque, PontoOnibus).
+-- O NPC segue a sequência em loop; com VariationChance (ajustada pela pontualidade) troca o passo
+-- por uma alternativa ponderada. PauseChance cria pequenos atrasos antes de sair.
+
+export type Routine = {
+	Sequence: { string },
+	Alternatives: { [string]: number }, -- destino -> peso
+	VariationChance: number,
+	PauseChance: number,
+	Durations: { [string]: { number } }, -- {mín, máx} em segundos; "Default" para os demais
+}
+
+-- Estado da máquina de estados enquanto o NPC está no destino
+local StateByStep: { [string]: string } = {
+	Home = "Idle",
+	Work = "Working",
+	Mercado = "Shopping",
+	Lanchonete = "Shopping",
+}
+
+local Types: { [string]: Routine } = {
+	Caseiro = {
+		Sequence = { "Home", "Mercado", "Home", "Praca", "Home", "Neighbor" },
+		Alternatives = { Praca = 3, Mercado = 2, Neighbor = 2, Parque = 1 },
+		VariationChance = 0.2,
+		PauseChance = 0.35,
+		Durations = { Home = { 15, 30 }, Default = { 8, 16 } },
+	},
+	Trabalhador = {
+		Sequence = { "Work", "Work", "Lanchonete", "Work", "Praca", "Home" },
+		Alternatives = { Lanchonete = 2, Praca = 2, Mercado = 1 },
+		VariationChance = 0.15,
+		PauseChance = 0.15,
+		Durations = { Work = { 20, 35 }, Home = { 10, 20 }, Default = { 8, 14 } },
+	},
+	Passeador = {
+		Sequence = { "Parque", "Praca", "PontoOnibus", "Parque", "Lanchonete", "Home" },
+		Alternatives = { Parque = 3, Praca = 3, PontoOnibus = 1, Neighbor = 1 },
+		VariationChance = 0.3,
+		PauseChance = 0.25,
+		Durations = { Parque = { 14, 26 }, Default = { 8, 16 } },
+	},
+	Social = {
+		Sequence = { "Praca", "Neighbor", "Lanchonete", "Praca", "Neighbor", "Home" },
+		Alternatives = { Neighbor = 3, Praca = 3, Mercado = 1, Lanchonete = 1 },
+		VariationChance = 0.3,
+		PauseChance = 0.3,
+		Durations = { Neighbor = { 10, 20 }, Default = { 8, 16 } },
+	},
+	Imprevisivel = {
+		Sequence = { "Praca", "Mercado", "Parque", "Neighbor", "PontoOnibus", "Home" },
+		Alternatives = { Praca = 2, Mercado = 2, Parque = 2, Lanchonete = 2, PontoOnibus = 2, Neighbor = 2 },
+		VariationChance = 0.5,
+		PauseChance = 0.4,
+		Durations = { Default = { 5, 14 } },
+	},
+}
+
+return {
+	Types = Types,
+	StateByStep = StateByStep,
+}
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">Remotes</string>
+          <string name="Source"><![CDATA[--!strict
+-- Ponto único de acesso à rede. O servidor cria os remotes; o cliente espera por eles.
+-- Só existe um remote cliente -> servidor (GetPlayerState, somente leitura). Todas as ações de
+-- jogo passam por ProximityPrompts, validados no InteractionService.
+--
+-- Servidor -> cliente:
+--   Notify(kind, text, title?)       kind: "Info" | "Success" | "Warning" | "Dialogue"
+--   PlayerState(state)               dados privados do jogador (quem ele é na rodada)
+--   MissionUpdate(missions)          missões privadas do jogador
+--   RoundResult(result)              resultado e revelação no fim da rodada
+-- Estado público da partida fica em atributos de ReplicatedStorage.GameState:
+--   Phase ("Lobby" | "Intermission" | "Preparing" | "Playing" | "Results"), PhaseEndsAt (GetServerTimeNow)
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local IS_SERVER = RunService:IsServer()
+
+local function get(parent: Instance, name: string, className: string): Instance
+	if IS_SERVER then
+		local existing = parent:FindFirstChild(name)
+		if existing then
+			return existing
+		end
+		local created = Instance.new(className)
+		created.Name = name
+		created.Parent = parent
+		return created
+	end
+	return parent:WaitForChild(name)
+end
+
+local folder = get(ReplicatedStorage, "Remotes", "Folder")
+
+return {
+	Notify = get(folder, "Notify", "RemoteEvent") :: RemoteEvent,
+	PlayerState = get(folder, "PlayerState", "RemoteEvent") :: RemoteEvent,
+	MissionUpdate = get(folder, "MissionUpdate", "RemoteEvent") :: RemoteEvent,
+	RoundResult = get(folder, "RoundResult", "RemoteEvent") :: RemoteEvent,
+	GetPlayerState = get(folder, "GetPlayerState", "RemoteFunction") :: RemoteFunction,
+	GameState = get(ReplicatedStorage, "GameState", "Folder") :: Folder,
+}
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">Types</string>
+          <string name="Source"><![CDATA[--!strict
+-- Tipos compartilhados entre servidor e cliente (formato dos dados que passam pelos remotes).
+
+-- A lógica pura só usa rng:NextInteger(min, max) e rng:NextNumber(); os testes passam um
+-- gerador falso com esses dois métodos.
+export type Rng = Random
+
+export type MissionStatus = "Active" | "Completed" | "Failed" | "Cancelled"
+
+export type MissionView = {
+	Id: string,
+	Title: string,
+	Description: string,
+	Status: MissionStatus,
+	ProgressText: string,
+	Progress: number,
+	Goal: number,
+	Reward: number,
+	ExpiresAt: number?, -- em workspace:GetServerTimeNow()
+	FailText: string,
+}
+
+export type PlayerState = {
+	InRound: boolean,
+	ResidentId: string?,
+	ResidentName: string?,
+}
+
+export type RevealEntry = {
+	ResidentName: string,
+	PlayerName: string?, -- nil = era NPC
+}
+
+export type RoundResult = {
+	Reason: string,
+	Participated: boolean,
+	Won: boolean,
+	ResidentName: string?,
+	Missions: { MissionView },
+	Earned: number,
+	Breakdown: { { Label: string, Amount: number } },
+	Reveal: { RevealEntry },
+}
+
+return {}
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="11">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Script" referent="12">
+      <Properties>
+        <string name="Name">Bootstrap</string>
+        <token name="RunContext">0</token>
+        <string name="Source"><![CDATA[--!strict
+-- Ponto de entrada do servidor: inicia os serviços em ordem, cada um protegido por pcall.
+-- Ordem importa: o mapa precisa existir antes de criar personagens, e o RoundService por último.
+
+local Services = script.Parent.Services
+
+local steps: { { Name: string, Essential: boolean, Start: () -> () } } = {
+	{ Name = "EconomyService", Essential = false, Start = function()
+		require(Services.EconomyService).Start()
+	end },
+	{ Name = "MapService", Essential = true, Start = function()
+		require(Services.MapService).Start()
+	end },
+	{ Name = "CharacterService", Essential = true, Start = function()
+		require(Services.CharacterService).Start()
+	end },
+	{ Name = "InteractionService", Essential = true, Start = function()
+		require(Services.InteractionService).Start()
+	end },
+	{ Name = "RoundService", Essential = true, Start = function()
+		require(Services.RoundService).Start()
+	end },
+}
+
+for _, step in steps do
+	local ok, err = pcall(step.Start :: any)
+	if ok then
+		print(`[Bootstrap] {step.Name} iniciado`)
+	else
+		warn(`[Bootstrap] falha ao iniciar {step.Name}: {err}`)
+		if step.Essential then
+			warn("[Bootstrap] serviço essencial falhou; o jogo não vai funcionar até o erro acima ser corrigido.")
+			break
+		end
+	end
+end
+]]></string>
+      </Properties>
+    </Item>
+    <Item class="Folder" referent="13">
+      <Properties>
+        <string name="Name">Logic</string>
+      </Properties>
+      <Item class="ModuleScript" referent="14">
+        <Properties>
+          <string name="Name">MatchSetup</string>
+          <string name="Source"><![CDATA[--!strict
+-- Sorteios do início da partida (quem participa, quais moradores existem, quem é NPC).
+-- Lógica pura: não usa APIs do Roblox, então roda nos testes fora do Studio.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CharacterConfig = require(ReplicatedStorage.Shared.Config.CharacterConfig)
+local Types = require(ReplicatedStorage.Shared.Types)
+
+type Rng = Types.Rng
+
+export type Limits = { TargetResidents: number, MinNPCs: number, MaxActiveNPCs: number }
+
+local MatchSetup = {}
+
+function MatchSetup.Shuffle<T>(list: { T }, rng: Rng): { T }
+	local result = table.clone(list)
+	for i = #result, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		result[i], result[j] = result[j], result[i]
+	end
+	return result
+end
+
+-- Quantos jogadores cabem numa partida sem faltar moradores para o mínimo de NPCs
+function MatchSetup.MaxPlayers(characterCount: number, maxParticipants: number, minNPCs: number): number
+	return math.max(0, math.min(maxParticipants, characterCount - minNPCs))
+end
+
+-- Moradores ativos da partida: os principais sempre entram; os secundários são sorteados
+function MatchSetup.PickResidents(characters: { CharacterConfig.Character }, playerCount: number, limits: Limits, rng: Rng): { string }
+	local npcCount = math.clamp(limits.TargetResidents - playerCount, limits.MinNPCs, limits.MaxActiveNPCs)
+	local total = math.min(#characters, playerCount + npcCount)
+
+	local mains: { string } = {}
+	local others: { string } = {}
+	for _, character in characters do
+		table.insert(if character.IsMain then mains else others, character.CharacterId)
+	end
+
+	local ordered = MatchSetup.Shuffle(mains, rng)
+	for _, id in MatchSetup.Shuffle(others, rng) do
+		table.insert(ordered, id)
+	end
+
+	local picked: { string } = {}
+	for i = 1, total do
+		picked[i] = ordered[i]
+	end
+	return picked
+end
+
+-- Cada jogador recebe um morador diferente; os moradores que sobram viram NPCs
+function MatchSetup.AssignPlayers<P>(residentIds: { string }, players: { P }, rng: Rng): ({ [P]: string }, { string })
+	assert(#players <= #residentIds, "mais jogadores do que moradores disponíveis")
+	local shuffled = MatchSetup.Shuffle(residentIds, rng)
+	local byPlayer: { [P]: string } = {}
+	local npcs: { string } = {}
+	for i, residentId in shuffled do
+		local player = players[i]
+		if player ~= nil then
+			byPlayer[player] = residentId
+		else
+			table.insert(npcs, residentId)
+		end
+	end
+	return byPlayer, npcs
+end
+
+return MatchSetup
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
+          <string name="Name">MissionLogic</string>
+          <string name="Source"><![CDATA[--!strict
+-- Geração e progresso das missões. Lógica pura e determinística (recebe Rng e o horário atual);
+-- o MissionService cuida de jogadores, rede e recompensas.
+--
+-- Uma missão só avança enquanto está "Active". Ao concluir, falhar ou ser cancelada ela congela,
+-- o que impede conclusão dupla e recompensa duplicada.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Types = require(ReplicatedStorage.Shared.Types)
+local MissionConfig = require(ReplicatedStorage.Shared.Config.MissionConfig)
+
+type Rng = Types.Rng
+type Template = MissionConfig.Template
+
+export type Named = { Id: string, Name: string }
+export type SpotRef = { Id: string, Area: string }
+
+export type Context = {
+	Role: string,
+	Count: number,
+	Pool: { string }?, -- MissionPool do morador (nil = todos os modelos)
+	SelfResident: string,
+	Home: string,
+	Residents: { Named }, -- moradores ativos na partida
+	PublicPois: { Named },
+	Houses: { Named },
+	Spots: { SpotRef },
+	Now: number,
+}
+
+export type Mission = {
+	Id: string,
+	TemplateId: string,
+	Type: string,
+	Title: string,
+	Description: string,
+	Reward: number,
+	FailText: string,
+	Status: Types.MissionStatus,
+	Progress: number,
+	Goal: number,
+	ExpiresAt: number?,
+	Targets: { string }, -- Visit: POIs | Talk: moradores | Deliver: casa | Find: esconderijo (segredo) | Follow: morador
+	TargetNames: { string },
+	Done: { [string]: boolean },
+	Carrying: boolean,
+	Radius: number,
+	ResidentTargets: { string }, -- moradores cuja saída do jogo cancela a missão
+}
+
+local MissionLogic = {}
+
+local function pickDistinct<T>(pool: { T }, count: number, rng: Rng): { T }
+	local copy = table.clone(pool)
+	local result: { T } = {}
+	for _ = 1, math.min(count, #copy) do
+		table.insert(result, table.remove(copy, rng:NextInteger(1, #copy)) :: T)
+	end
+	return result
+end
+
+local function joinNames(names: { string }): string
+	if #names <= 1 then
+		return names[1] or ""
+	end
+	return table.concat(names, ", ", 1, #names - 1) .. " e " .. names[#names]
+end
+
+local function fill(text: string, values: { [string]: string }): string
+	return (text:gsub("{(%w+)}", values))
+end
+
+local function except(list: { Named }, excludedId: string): { Named }
+	local result: { Named } = {}
+	for _, item in list do
+		if item.Id ~= excludedId then
+			table.insert(result, item)
+		end
+	end
+	return result
+end
+
+local function setTargets(mission: Mission, picked: { Named })
+	for _, item in picked do
+		table.insert(mission.Targets, item.Id)
+		table.insert(mission.TargetNames, item.Name)
+	end
+end
+
+-- Cada construtor preenche os alvos da missão; retorna false se não há alvos possíveis
+local builders: { [string]: (Mission, Template, Context, Rng) -> boolean } = {
+	Visit = function(mission, template, ctx, rng)
+		local pool = if template.PoiKind == "House" then except(ctx.Houses, ctx.Home) else ctx.PublicPois
+		local picked = pickDistinct(pool, template.Count or 3, rng)
+		if #picked == 0 then
+			return false
+		end
+		setTargets(mission, picked)
+		mission.Goal = #picked
+		mission.Description = fill(template.Description, { targets = joinNames(mission.TargetNames) })
+		return true
+	end,
+
+	Talk = function(mission, template, ctx, rng)
+		local picked = pickDistinct(except(ctx.Residents, ctx.SelfResident), template.Count or 2, rng)
+		if #picked == 0 then
+			return false
+		end
+		setTargets(mission, picked)
+		mission.ResidentTargets = table.clone(mission.Targets)
+		mission.Goal = #picked
+		mission.Description = fill(template.Description, { targets = joinNames(mission.TargetNames) })
+		return true
+	end,
+
+	Deliver = function(mission, template, ctx, rng)
+		local house = pickDistinct(except(ctx.Houses, ctx.Home), 1, rng)[1]
+		if not house then
+			return false
+		end
+		setTargets(mission, { house })
+		mission.Goal = 2 -- retirar + entregar
+		mission.Description = fill(template.Description, { target = house.Name })
+		return true
+	end,
+
+	Find = function(mission, template, ctx, rng)
+		local spot = pickDistinct(ctx.Spots, 1, rng)[1]
+		if not spot then
+			return false
+		end
+		-- o esconderijo exato fica só no servidor; o jogador recebe apenas a área
+		table.insert(mission.Targets, spot.Id)
+		table.insert(mission.TargetNames, spot.Area)
+		local items = template.Items or { "um objeto" }
+		mission.Description = fill(template.Description, {
+			item = items[rng:NextInteger(1, #items)],
+			area = spot.Area,
+		})
+		return true
+	end,
+
+	Follow = function(mission, template, ctx, rng)
+		local target = pickDistinct(except(ctx.Residents, ctx.SelfResident), 1, rng)[1]
+		if not target then
+			return false
+		end
+		setTargets(mission, { target })
+		mission.ResidentTargets = { target.Id }
+		mission.Goal = template.Seconds or 25
+		mission.Description = fill(template.Description, {
+			target = target.Name,
+			seconds = tostring(mission.Goal),
+			radius = tostring(mission.Radius),
+		})
+		return true
+	end,
+}
+
+MissionLogic.SupportedTypes = builders
+
+local function newMission(template: Template, index: number, now: number): Mission
+	return {
+		Id = template.Id .. "#" .. index,
+		TemplateId = template.Id,
+		Type = template.Type,
+		Title = template.Title,
+		Description = template.Description,
+		Reward = template.Reward,
+		FailText = template.FailText,
+		Status = "Active",
+		Progress = 0,
+		Goal = 1,
+		ExpiresAt = if template.TimeLimit then now + template.TimeLimit else nil,
+		Targets = {},
+		TargetNames = {},
+		Done = {},
+		Carrying = false,
+		Radius = template.Radius or 0,
+		ResidentTargets = {},
+	}
+end
+
+local function pickWeightedIndex(candidates: { Template }, rng: Rng): number
+	local total = 0
+	for _, template in candidates do
+		total += template.Weight
+	end
+	local roll = rng:NextNumber() * total
+	for i, template in candidates do
+		roll -= template.Weight
+		if roll <= 0 then
+			return i
+		end
+	end
+	return #candidates
+end
+
+-- Sorteia ctx.Count missões de modelos diferentes, filtradas por papel e pelo MissionPool
+function MissionLogic.Generate(templates: { Template }, ctx: Context, rng: Rng): { Mission }
+	local pool = ctx.Pool
+	local candidates: { Template } = {}
+	for _, template in templates do
+		local roleAllowed = table.find(template.AllowedRoles, ctx.Role) ~= nil
+		local inPool = pool == nil or table.find(pool, template.Id) ~= nil
+		if roleAllowed and inPool then
+			table.insert(candidates, template)
+		end
+	end
+
+	local missions: { Mission } = {}
+	while #missions < ctx.Count and #candidates > 0 do
+		local template = table.remove(candidates, pickWeightedIndex(candidates, rng)) :: Template
+		local mission = newMission(template, #missions + 1, ctx.Now)
+		local build = builders[template.Type]
+		if build and build(mission, template, ctx, rng) then
+			table.insert(missions, mission)
+		end
+	end
+	return missions
+end
+
+local function markTarget(mission: Mission, targetId: string?): boolean
+	if targetId == nil or mission.Done[targetId] or table.find(mission.Targets, targetId) == nil then
+		return false
+	end
+	mission.Done[targetId] = true
+	mission.Progress += 1
+	if mission.Progress >= mission.Goal then
+		mission.Status = "Completed"
+	end
+	return true
+end
+
+-- Eventos: "EnterPoi" (POI), "Talk" (morador), "Search" (esconderijo), "Pickup", "Deliver" (casa).
+-- Retorna true se a missão mudou.
+function MissionLogic.Apply(mission: Mission, event: string, targetId: string?): boolean
+	if mission.Status ~= "Active" then
+		return false
+	end
+	local kind = mission.Type
+	if
+		(kind == "Visit" and event == "EnterPoi")
+		or (kind == "Talk" and event == "Talk")
+		or (kind == "Find" and event == "Search")
+	then
+		return markTarget(mission, targetId)
+	end
+	if kind == "Deliver" then
+		if event == "Pickup" and not mission.Carrying and mission.Progress == 0 then
+			mission.Carrying = true
+			mission.Progress = 1
+			return true
+		elseif event == "Deliver" and mission.Carrying and targetId == mission.Targets[1] then
+			mission.Carrying = false
+			mission.Progress = 2
+			mission.Status = "Completed"
+			return true
+		end
+	end
+	return false
+end
+
+-- Missão "Follow": soma o tempo em que o jogador ficou dentro do raio do alvo.
+-- distance = nil quando o alvo não está no mapa. Retorna true quando vale a pena atualizar o cliente.
+function MissionLogic.TickFollow(mission: Mission, dt: number, distance: number?): boolean
+	if mission.Status ~= "Active" or mission.Type ~= "Follow" or distance == nil or distance > mission.Radius then
+		return false
+	end
+	local before = math.floor(mission.Progress)
+	mission.Progress = math.min(mission.Goal, mission.Progress + dt)
+	if mission.Progress >= mission.Goal then
+		mission.Status = "Completed"
+		return true
+	end
+	return math.floor(mission.Progress) ~= before
+end
+
+function MissionLogic.Expire(mission: Mission, now: number): boolean
+	local expiresAt = mission.ExpiresAt
+	if mission.Status == "Active" and expiresAt ~= nil and now >= expiresAt then
+		mission.Status = "Failed"
+		return true
+	end
+	return false
+end
+
+-- Morador-alvo saiu do jogo: cancela, a não ser que aquele alvo já tenha sido cumprido
+function MissionLogic.CancelIfTarget(mission: Mission, residentId: string): boolean
+	if mission.Status ~= "Active" or mission.Done[residentId] or table.find(mission.ResidentTargets, residentId) == nil then
+		return false
+	end
+	mission.Status = "Cancelled"
+	return true
+end
+
+-- Fim da rodada: o que não foi concluído falha
+function MissionLogic.Finish(mission: Mission): boolean
+	if mission.Status == "Active" then
+		mission.Status = "Failed"
+		return true
+	end
+	return false
+end
+
+function MissionLogic.View(mission: Mission): Types.MissionView
+	local progressText
+	if mission.Type == "Deliver" then
+		if mission.Status == "Completed" then
+			progressText = "Entregue!"
+		elseif mission.Carrying then
+			progressText = "Leve até: " .. mission.TargetNames[1]
+		else
+			progressText = "Retire no balcão de encomendas do Mercado"
+		end
+	elseif mission.Type == "Follow" then
+		progressText = string.format("%d/%d s", math.floor(mission.Progress), mission.Goal)
+	else
+		progressText = string.format("%d/%d", mission.Progress, mission.Goal)
+	end
+
+	return {
+		Id = mission.Id,
+		Title = mission.Title,
+		Description = mission.Description,
+		Status = mission.Status,
+		ProgressText = progressText,
+		Progress = mission.Progress,
+		Goal = mission.Goal,
+		Reward = mission.Reward,
+		ExpiresAt = mission.ExpiresAt,
+		FailText = mission.FailText,
+	}
+end
+
+return MissionLogic
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="16">
+        <Properties>
+          <string name="Name">RoutinePlanner</string>
+          <string name="Source"><![CDATA[--!strict
+-- "Cérebro" de rotina do NPC: escolhe o próximo destino a partir da rotina, da personalidade e
+-- do contexto. Lógica pura (o movimento fica no NPCService), então é testável fora do Studio.
+--
+-- Comportamento imperfeito, mas coerente:
+--   * segue a sequência da rotina em loop, começando de um passo sorteado;
+--   * com VariationChance (maior para quem é menos pontual) troca o passo por uma alternativa;
+--   * nunca escolhe o lugar onde já está;
+--   * às vezes hesita alguns segundos antes de sair (PauseChance);
+--   * no fim da rodada volta para casa e fica lá.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Types = require(ReplicatedStorage.Shared.Types)
+local RoutineConfig = require(ReplicatedStorage.Shared.Config.RoutineConfig)
+
+type Rng = Types.Rng
+
+export type Places = {
+	Home: string,
+	Work: string?,
+	Neighbors: { string }, -- casas de outros moradores (destino "Neighbor")
+}
+
+export type Personality = { Punctuality: number, Energy: number }
+
+export type Activity = {
+	PoiId: string,
+	Step: string, -- passo da rotina que gerou o destino ("Home", "Work", "Neighbor", "Praca"...)
+	State: string, -- estado ao chegar: "Idle" | "Working" | "Shopping"
+	Duration: number,
+	Delay: number, -- hesitação antes de sair
+	IsHome: boolean,
+}
+
+export type Context = {
+	TimeLeft: number,
+	CurrentPoi: string?,
+}
+
+export type Planner = {
+	Next: (Context) -> Activity,
+}
+
+local RoutinePlanner = {}
+
+function RoutinePlanner.new(
+	routine: RoutineConfig.Routine,
+	places: Places,
+	personality: Personality,
+	returnHomeTime: number,
+	rng: Rng
+): Planner
+	local sequence = routine.Sequence
+	local index = rng:NextInteger(1, #sequence)
+
+	-- chaves ordenadas para o sorteio ser reproduzível com a mesma seed
+	local alternatives: { string } = {}
+	local totalWeight = 0
+	for step, weight in routine.Alternatives do
+		table.insert(alternatives, step)
+		totalWeight += weight
+	end
+	table.sort(alternatives)
+
+	local function between(min: number, max: number): number
+		return min + (max - min) * rng:NextNumber()
+	end
+
+	local function pickAlternative(): string?
+		if totalWeight <= 0 then
+			return nil
+		end
+		local roll = rng:NextNumber() * totalWeight
+		for _, step in alternatives do
+			roll -= routine.Alternatives[step]
+			if roll <= 0 then
+				return step
+			end
+		end
+		return alternatives[#alternatives]
+	end
+
+	local function resolve(step: string): string
+		if step == "Home" then
+			return places.Home
+		elseif step == "Work" then
+			return places.Work or places.Home
+		elseif step == "Neighbor" then
+			if #places.Neighbors == 0 then
+				return places.Home
+			end
+			return places.Neighbors[rng:NextInteger(1, #places.Neighbors)]
+		end
+		return step
+	end
+
+	local function takeStep(): string
+		local step = sequence[index]
+		index = index % #sequence + 1
+		local chance = routine.VariationChance * (1.5 - personality.Punctuality)
+		if rng:NextNumber() < chance then
+			return pickAlternative() or step
+		end
+		return step
+	end
+
+	local function duration(step: string): number
+		local range = routine.Durations[step] or routine.Durations.Default or { 8, 15 }
+		-- quem tem mais energia fica menos tempo parado
+		return between(range[1], range[2]) * (1.3 - 0.6 * personality.Energy)
+	end
+
+	local function nextActivity(ctx: Context): Activity
+		if ctx.TimeLeft <= returnHomeTime then
+			return {
+				PoiId = places.Home,
+				Step = "Home",
+				State = "Idle",
+				Duration = math.max(ctx.TimeLeft, 0) + 5,
+				Delay = 0,
+				IsHome = true,
+			}
+		end
+
+		local step, poi = "Home", places.Home
+		for _ = 1, #sequence + 2 do
+			step = takeStep()
+			poi = resolve(step)
+			if poi ~= ctx.CurrentPoi then
+				break
+			end
+		end
+		if poi == ctx.CurrentPoi then
+			-- rotina sem saída (ex.: sequência de um lugar só): qualquer destino diferente serve
+			for _, alternative in alternatives do
+				local candidate = resolve(alternative)
+				if candidate ~= ctx.CurrentPoi then
+					step, poi = alternative, candidate
+					break
+				end
+			end
+		end
+
+		return {
+			PoiId = poi,
+			Step = step,
+			State = RoutineConfig.StateByStep[step] or "Idle",
+			Duration = duration(step),
+			Delay = if rng:NextNumber() < routine.PauseChance then between(1.5, 5) else 0,
+			IsHome = poi == places.Home,
+		}
+	end
+
+	return { Next = nextActivity }
+end
+
+return RoutinePlanner
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="17">
+      <Properties>
+        <string name="Name">Services</string>
+      </Properties>
+      <Item class="ModuleScript" referent="18">
+        <Properties>
+          <string name="Name">CharacterService</string>
+          <string name="Source"><![CDATA[--!strict
+-- Aparência dos moradores e ciclo de vida dos personagens dos jogadores.
+-- O mesmo HumanoidDescription vira o NPC e o disfarce do jogador, e SetupResident aplica nome,
+-- velocidade e o prompt "Conversar" de forma idêntica nos dois: nada visual denuncia quem é NPC.
+-- CharacterAutoLoads fica desligado; o servidor decide onde cada um nasce (lobby ou bairro).
+
+local Players = game:GetService("Players")
+local PhysicsService = game:GetService("PhysicsService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local CharacterConfig = require(ReplicatedStorage.Shared.Config.CharacterConfig)
+local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
+
+type Character = CharacterConfig.Character
+
+local CharacterService = {}
+
+-- moradores não colidem entre si: ninguém bloqueia porta ou empurra NPC, e o comportamento
+-- físico é igual para jogadores e NPCs
+local COLLISION_GROUP = "Residents"
+
+local descriptions: { [string]: HumanoidDescription } = {}
+local respawnHandler: (Player) -> () = function(player)
+	CharacterService.SpawnInLobby(player)
+end
+local warnedRigType = false
+
+function CharacterService.GetDescription(cfg: Character): HumanoidDescription
+	local cached = descriptions[cfg.CharacterId]
+	if cached then
+		return cached
+	end
+	local description = Instance.new("HumanoidDescription")
+	local look = cfg.Appearance
+	description.HeadColor = look.SkinColor
+	description.TorsoColor = look.ShirtColor
+	description.LeftArmColor = look.ArmColor or look.SkinColor
+	description.RightArmColor = look.ArmColor or look.SkinColor
+	description.LeftLegColor = look.PantsColor
+	description.RightLegColor = look.PantsColor
+	for property, value in look.Description do
+		local ok, err = pcall(function()
+			(description :: any)[property] = value
+		end)
+		if not ok then
+			warn(`[CharacterService] {cfg.CharacterId}: Appearance.Description.{property} inválida: {err}`)
+		end
+	end
+	descriptions[cfg.CharacterId] = description
+	return description
+end
+
+function CharacterService.ApplyCollisionGroup(model: Model)
+	local function apply(instance: Instance)
+		if instance:IsA("BasePart") then
+			instance.CollisionGroup = COLLISION_GROUP
+		end
+	end
+	for _, descendant in model:GetDescendants() do
+		apply(descendant)
+	end
+	model.DescendantAdded:Connect(apply)
+end
+
+-- Comum a NPCs e jogadores disfarçados
+function CharacterService.SetupResident(model: Model, cfg: Character)
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root then
+		warn(`[CharacterService] modelo de {cfg.CharacterId} sem Humanoid/HumanoidRootPart`)
+		return
+	end
+	if humanoid.RigType ~= Enum.HumanoidRigType.R15 and not warnedRigType then
+		warnedRigType = true
+		warn("[CharacterService] Personagem não é R15. Em Game Settings > Avatar, use Avatar Type = R15 para jogadores e NPCs ficarem iguais.")
+	end
+	humanoid.DisplayName = cfg.DisplayName
+	humanoid.WalkSpeed = cfg.WalkSpeed
+
+	local talk = Instance.new("ProximityPrompt")
+	talk.Name = "TalkPrompt"
+	talk.ActionText = "Conversar"
+	talk.ObjectText = cfg.DisplayName
+	talk.MaxActivationDistance = 8
+	talk.RequiresLineOfSight = false
+	talk:SetAttribute("Action", "Talk")
+	talk:SetAttribute("ResidentId", cfg.CharacterId)
+	talk.Parent = root
+end
+
+function CharacterService.SpawnInLobby(player: Player)
+	if not player.Parent then
+		return
+	end
+	local ok, err = pcall(player.LoadCharacterAsync, player)
+	if not ok then
+		warn(`[CharacterService] falha ao criar personagem de {player.Name}: {err}`)
+	end
+end
+
+function CharacterService.SpawnAsResident(player: Player, cfg: Character, cframe: CFrame)
+	if not player.Parent then
+		return
+	end
+	-- com StreamingEnabled, carrega o chão antes de teleportar para ninguém cair do mapa
+	pcall(player.RequestStreamAroundAsync, player, cframe.Position, 5)
+	local ok, err = pcall(player.LoadCharacterWithHumanoidDescriptionAsync, player, CharacterService.GetDescription(cfg):Clone())
+	local character = player.Character
+	if not ok or not character then
+		warn(`[CharacterService] falha ao disfarçar {player.Name} como {cfg.CharacterId}: {err}`)
+		return
+	end
+	character:PivotTo(cframe)
+	CharacterService.SetupResident(character, cfg)
+end
+
+-- RoundService decide se o jogador volta ao bairro (disfarçado) ou ao lobby
+function CharacterService.SetRespawnHandler(handler: (Player) -> ())
+	respawnHandler = handler
+end
+
+local function onCharacterAdded(player: Player, character: Model)
+	CharacterService.ApplyCollisionGroup(character)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if not humanoid or not humanoid:IsA("Humanoid") then
+		return
+	end
+	humanoid.Died:Once(function()
+		task.wait(GameConfig.RespawnDelay)
+		-- só renasce se nada já tiver criado um personagem novo nesse meio tempo
+		if player.Parent and player.Character == character then
+			respawnHandler(player)
+		end
+	end)
+end
+
+local function onPlayerAdded(player: Player)
+	player.CharacterAdded:Connect(function(character)
+		onCharacterAdded(player, character)
+	end)
+	if player.Character then
+		onCharacterAdded(player, player.Character)
+	else
+		respawnHandler(player)
+	end
+end
+
+function CharacterService.Start()
+	Players.CharacterAutoLoads = false
+	if not PhysicsService:IsCollisionGroupRegistered(COLLISION_GROUP) then
+		PhysicsService:RegisterCollisionGroup(COLLISION_GROUP)
+	end
+	PhysicsService:CollisionGroupSetCollidable(COLLISION_GROUP, COLLISION_GROUP, false)
+
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	for _, player in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, player)
+	end
+end
+
+return CharacterService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="19">
+        <Properties>
+          <string name="Name">EconomyService</string>
+          <string name="Source"><![CDATA[--!strict
+-- Fichas do Bairro. Fase 1: saldo em memória, exibido no leaderstats.
+-- Nenhum remote deixa o cliente mexer em fichas: só o servidor chama Grant.
+-- A Fase 4 troca o armazenamento por DataStoreService mantendo esta mesma interface.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
+
+local EconomyService = {}
+
+-- chaves já pagas por jogador (ex.: "round:3"), para nunca pagar a mesma recompensa duas vezes
+local grantedKeys: { [Player]: { [string]: boolean } } = {}
+
+local function fichasValue(player: Player): IntValue?
+	local stats = player:FindFirstChild("leaderstats")
+	local value = stats and stats:FindFirstChild("Fichas")
+	return if value and value:IsA("IntValue") then value else nil
+end
+
+local function setup(player: Player)
+	if grantedKeys[player] then
+		return
+	end
+	grantedKeys[player] = {}
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local fichas = Instance.new("IntValue")
+	fichas.Name = "Fichas"
+	fichas.Parent = stats
+	stats.Parent = player
+end
+
+-- Concede fichas uma única vez por chave. Retorna false se o pagamento foi recusado.
+function EconomyService.Grant(player: Player, amount: number, key: string): boolean
+	if amount ~= math.floor(amount) or amount <= 0 or amount > GameConfig.MaxGrantPerRound then
+		warn(`[EconomyService] valor inválido recusado: {amount} ({key})`)
+		return false
+	end
+	local keys = grantedKeys[player]
+	local value = fichasValue(player)
+	if not keys or not value or keys[key] then
+		return false
+	end
+	keys[key] = true
+	value.Value += amount
+	return true
+end
+
+function EconomyService.Start()
+	Players.PlayerAdded:Connect(setup)
+	for _, player in Players:GetPlayers() do
+		setup(player)
+	end
+	Players.PlayerRemoving:Connect(function(player)
+		grantedKeys[player] = nil
+	end)
+end
+
+return EconomyService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="20">
+        <Properties>
+          <string name="Name">InteractionService</string>
+          <string name="Source"><![CDATA[--!strict
+-- Todas as ações de jogo chegam por ProximityPrompts criados pelo servidor. Antes de qualquer
+-- efeito, valida: limite de frequência, fase da partida, se o jogador participa, se está vivo e
+-- se está perto do objeto. Atributos dos prompts não podem ser alterados pelo cliente.
+
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local CharacterConfig = require(ReplicatedStorage.Shared.Config.CharacterConfig)
+local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local MissionService = require(script.Parent.MissionService)
+local NPCService = require(script.Parent.NPCService)
+local RoundService = require(script.Parent.RoundService)
+
+type Actor = {
+	Player: Player,
+	ResidentId: string,
+	Position: Vector3,
+}
+
+local InteractionService = {}
+
+local TALK_PAUSE = 4 -- segundos que o NPC fica parado conversando
+
+local lastUse: { [Player]: number } = {}
+local lastTalk: { [Player]: { [string]: number } } = {}
+
+local function promptPosition(prompt: ProximityPrompt): Vector3?
+	local parent = prompt.Parent
+	if parent and parent:IsA("BasePart") then
+		return parent.Position
+	elseif parent and parent:IsA("Attachment") then
+		return parent.WorldPosition
+	end
+	return nil
+end
+
+local function greeting(residentId: string): string
+	local cfg = CharacterConfig.ById[residentId]
+	local pool = (cfg and cfg.DialoguePool or CharacterConfig.DefaultDialogue).Greeting
+	return pool[math.random(1, #pool)]
+end
+
+local handlers: { [string]: (Actor, ProximityPrompt) -> () } = {
+	-- Qualquer morador responde com uma fala do personagem, seja NPC ou jogador disfarçado:
+	-- a diferença tem que aparecer no comportamento, não na resposta automática.
+	Talk = function(actor, prompt)
+		local targetId = prompt:GetAttribute("ResidentId")
+		if typeof(targetId) ~= "string" or targetId == actor.ResidentId then
+			return
+		end
+		local target = RoundService.GetResident(targetId)
+		local me = RoundService.GetResident(actor.ResidentId)
+		if not target or not me then
+			return
+		end
+		local talks = lastTalk[actor.Player] or {}
+		lastTalk[actor.Player] = talks
+		local now = os.clock()
+		if now - (talks[targetId] or -math.huge) < GameConfig.TalkCooldownPerTarget then
+			return
+		end
+		talks[targetId] = now
+
+		Remotes.Notify:FireClient(actor.Player, "Dialogue", greeting(targetId), target.Name)
+		if target.Player then
+			Remotes.Notify:FireClient(target.Player, "Info", `{me.Name} puxou conversa com você.`)
+		else
+			NPCService.Interrupt(targetId, actor.Position, TALK_PAUSE)
+		end
+		MissionService.Report(actor.Player, "Talk", targetId)
+	end,
+
+	Search = function(actor, prompt)
+		local spotId = prompt:GetAttribute("SpotId")
+		if typeof(spotId) == "string" and not MissionService.Report(actor.Player, "Search", spotId) then
+			Remotes.Notify:FireClient(actor.Player, "Info", "Nada de interessante aqui.")
+		end
+	end,
+
+	Pickup = function(actor)
+		if MissionService.Report(actor.Player, "Pickup") then
+			Remotes.Notify:FireClient(actor.Player, "Info", "Encomenda retirada! Leve até a caixa de correio indicada na missão.")
+		else
+			Remotes.Notify:FireClient(actor.Player, "Info", "Não há nenhuma encomenda no seu nome.")
+		end
+	end,
+
+	Deliver = function(actor, prompt)
+		local houseId = prompt:GetAttribute("HouseId")
+		if typeof(houseId) == "string" and not MissionService.Report(actor.Player, "Deliver", houseId) then
+			Remotes.Notify:FireClient(actor.Player, "Info", "Você não tem encomenda para esta casa.")
+		end
+	end,
+}
+
+local function onPromptTriggered(prompt: ProximityPrompt, player: Player)
+	local action = prompt:GetAttribute("Action")
+	local handler = if typeof(action) == "string" then handlers[action] else nil
+	if not handler then
+		return
+	end
+
+	local now = os.clock()
+	if now - (lastUse[player] or -math.huge) < GameConfig.InteractionCooldown then
+		return
+	end
+	lastUse[player] = now
+
+	if RoundService.GetPhase() ~= "Playing" then
+		return
+	end
+	local residentId = RoundService.GetResidentIdOf(player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local target = promptPosition(prompt)
+	if not residentId or not humanoid or humanoid.Health <= 0 or not root or not root:IsA("BasePart") or not target then
+		return
+	end
+	if (root.Position - target).Magnitude > GameConfig.InteractionMaxDistance then
+		return
+	end
+
+	handler({ Player = player, ResidentId = residentId, Position = root.Position }, prompt)
+end
+
+function InteractionService.Start()
+	ProximityPromptService.PromptTriggered:Connect(onPromptTriggered)
+	Players.PlayerRemoving:Connect(function(player)
+		lastUse[player] = nil
+		lastTalk[player] = nil
+	end)
+end
+
+return InteractionService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="21">
+        <Properties>
+          <string name="Name">MapService</string>
+          <string name="Source"><![CDATA[--!strict
+-- Gera o lobby e o bairro a partir do MapConfig (uma vez, ao iniciar o servidor) e responde
+-- perguntas espaciais: em qual ponto de interesse uma posição está e onde um morador pode parar.
+-- Toda a geometria é feita de Parts simples; os modelos ficam em Workspace.ActiveMap e Workspace.Lobby.
+
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local MapConfig = require(ReplicatedStorage.Shared.Config.MapConfig)
+
+type Poi = MapConfig.Poi
+type Spot = MapConfig.Spot
+
+local MapService = {}
+
+local COLORS = MapConfig.Colors
+local TOP = MapConfig.BlockTop
+local HOUSE = Vector3.new(16, 10, 14) -- largura, altura, profundidade
+local PORCH_DEPTH = 5
+local ROOF_HEIGHT = 5
+
+local poiById: { [string]: Poi } = {}
+for _, poi in MapConfig.Pois do
+	poiById[poi.Id] = poi
+end
+
+---------------------------------------------------------------------------
+-- Primitivas
+---------------------------------------------------------------------------
+
+local function part(parent: Instance, name: string, size: Vector3, cframe: CFrame, color: Color3, material: Enum.Material?): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true
+	p.Size = size
+	p.CFrame = cframe
+	p.Color = color
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = parent
+	return p
+end
+
+-- Cilindro em pé (no Roblox o eixo do cilindro é o X da peça)
+local function cylinder(parent: Instance, name: string, height: number, diameter: number, center: Vector3, color: Color3, material: Enum.Material?): Part
+	local p = part(parent, name, Vector3.new(height, diameter, diameter), CFrame.new(center) * CFrame.Angles(0, 0, math.rad(90)), color, material)
+	p.Shape = Enum.PartType.Cylinder
+	return p
+end
+
+local function ball(parent: Instance, name: string, diameter: number, center: Vector3, color: Color3, material: Enum.Material?): Part
+	local p = part(parent, name, Vector3.one * diameter, CFrame.new(center), color, material)
+	p.Shape = Enum.PartType.Ball
+	return p
+end
+
+local function model(parent: Instance, name: string): Model
+	local m = Instance.new("Model")
+	m.Name = name
+	m.Parent = parent
+	return m
+end
+
+-- Placa flutuante legível de longe (tamanho em studs)
+local function sign(adornee: BasePart, text: string, offset: Vector3, width: number, height: number?)
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Placa"
+	gui.Size = UDim2.fromScale(width, height or 2.6)
+	gui.StudsOffsetWorldSpace = offset
+	gui.MaxDistance = 170
+	gui.LightInfluence = 0
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundColor3 = Color3.fromRGB(45, 42, 62)
+	label.BackgroundTransparency = 0.1
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.RichText = true
+	label.Text = text
+	label.Parent = gui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.25, 0)
+	corner.Parent = label
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0.04, 0)
+	padding.PaddingRight = UDim.new(0.04, 0)
+	padding.PaddingTop = UDim.new(0.12, 0)
+	padding.PaddingBottom = UDim.new(0.12, 0)
+	padding.Parent = label
+
+	gui.Parent = adornee
+end
+
+-- Prompt de interação; Action/atributos são lidos e validados pelo InteractionService
+local function prompt(parent: BasePart, action: string, actionText: string, objectText: string, attributes: { [string]: string }, hold: number)
+	local pp = Instance.new("ProximityPrompt")
+	pp.ActionText = actionText
+	pp.ObjectText = objectText
+	pp.HoldDuration = hold
+	pp.MaxActivationDistance = 8
+	pp.RequiresLineOfSight = false
+	pp:SetAttribute("Action", action)
+	for key, value in attributes do
+		pp:SetAttribute(key, value)
+	end
+	pp.Parent = parent
+end
+
+---------------------------------------------------------------------------
+-- Decoração reutilizável
+---------------------------------------------------------------------------
+
+-- cf aponta para onde o banco "olha"; o encosto fica atrás (+Z local)
+local function bench(parent: Instance, cf: CFrame)
+	part(parent, "Assento", Vector3.new(6, 0.5, 2), cf * CFrame.new(0, 1.6, 0), COLORS.Wood, Enum.Material.WoodPlanks)
+	part(parent, "Encosto", Vector3.new(6, 2, 0.4), cf * CFrame.new(0, 2.8, 0.9), COLORS.Wood, Enum.Material.WoodPlanks)
+	for _, x in { -2.5, 2.5 } do
+		part(parent, "Pe", Vector3.new(0.4, 1.4, 1.6), cf * CFrame.new(x, 0.7, 0), COLORS.Metal, Enum.Material.Metal)
+	end
+end
+
+local function tree(parent: Instance, base: Vector3)
+	cylinder(parent, "Tronco", 6, 1.6, base + Vector3.new(0, 3, 0), COLORS.Trunk, Enum.Material.Wood)
+	-- copa sem colisão: dá para passar por baixo e não atrapalha o pathfinding
+	ball(parent, "Copa", 9, base + Vector3.new(0, 8, 0), COLORS.Leaves, Enum.Material.Grass).CanCollide = false
+end
+
+---------------------------------------------------------------------------
+-- Estrutura do bairro
+---------------------------------------------------------------------------
+
+local function buildGround(map: Instance)
+	local size = MapConfig.MapHalfSize * 2
+	part(map, "Asfalto", Vector3.new(size, 2, size), CFrame.new(0, MapConfig.GroundTop - 1, 0), COLORS.Asphalt, Enum.Material.Asphalt)
+
+	-- faixa amarela no meio de cada rua (internas e anel externo)
+	local pitch = MapConfig.BlockPitch
+	local lineY = MapConfig.GroundTop + 0.025
+	for _, offset in { -pitch / 2, pitch / 2, -pitch * 1.5, pitch * 1.5 } do
+		part(map, "Faixa", Vector3.new(size - 8, 0.05, 0.6), CFrame.new(0, lineY, offset), COLORS.StreetLine)
+		part(map, "Faixa", Vector3.new(0.6, 0.05, size - 8), CFrame.new(offset, lineY, 0), COLORS.StreetLine)
+	end
+
+	-- cerca viva que limita o bairro
+	local edge = MapConfig.MapHalfSize - 2
+	for _, side in { -1, 1 } do
+		part(map, "CercaViva", Vector3.new(size, 8, 4), CFrame.new(0, MapConfig.GroundTop + 4, edge * side), COLORS.Hedge, Enum.Material.LeafyGrass)
+		part(map, "CercaViva", Vector3.new(4, 8, size), CFrame.new(edge * side, MapConfig.GroundTop + 4, 0), COLORS.Hedge, Enum.Material.LeafyGrass)
+	end
+end
+
+-- Quarteirão: calçada em volta e miolo (gramado ou piso da praça), tudo na mesma altura
+local function buildBlock(map: Instance, cx: number, cz: number, kind: string)
+	local size = MapConfig.BlockSize
+	local walk = MapConfig.SidewalkWidth
+	local inner = size - walk * 2
+	local thickness = TOP - MapConfig.GroundTop
+	local y = MapConfig.GroundTop + thickness / 2
+	local edge = size / 2 - walk / 2
+	local block = model(map, "Quarteirao_" .. kind)
+
+	part(block, "Calcada", Vector3.new(size, thickness, walk), CFrame.new(cx, y, cz - edge), COLORS.Sidewalk, Enum.Material.Concrete)
+	part(block, "Calcada", Vector3.new(size, thickness, walk), CFrame.new(cx, y, cz + edge), COLORS.Sidewalk, Enum.Material.Concrete)
+	part(block, "Calcada", Vector3.new(walk, thickness, inner), CFrame.new(cx - edge, y, cz), COLORS.Sidewalk, Enum.Material.Concrete)
+	part(block, "Calcada", Vector3.new(walk, thickness, inner), CFrame.new(cx + edge, y, cz), COLORS.Sidewalk, Enum.Material.Concrete)
+
+	if kind == "Plaza" then
+		part(block, "Piso", Vector3.new(inner, thickness, inner), CFrame.new(cx, y, cz), COLORS.Plaza, Enum.Material.Cobblestone)
+	else
+		part(block, "Gramado", Vector3.new(inner, thickness, inner), CFrame.new(cx, y, cz), COLORS.Lot, Enum.Material.Grass)
+	end
+end
+
+local function buildHouse(map: Instance, poi: Poi)
+	local facing = poi.Facing or Vector3.zAxis
+	local center = poi.Position - facing * (HOUSE.Z / 2 + PORCH_DEPTH)
+	local base = CFrame.lookAt(center, center + facing) -- LookVector (-Z local) = fachada
+	local wallColor = poi.Color or Color3.new(1, 1, 1)
+	local house = model(map, poi.Id)
+
+	local body = part(house, "Corpo", HOUSE, base * CFrame.new(0, HOUSE.Y / 2, 0), wallColor, Enum.Material.Plaster)
+
+	-- telhado de duas águas: a rampa da WedgePart sobe em direção ao +Z local dela
+	local roofSize = Vector3.new(HOUSE.X + 2, ROOF_HEIGHT, HOUSE.Z / 2 + 1)
+	for _, side in { -1, 1 } do
+		local wedge = Instance.new("WedgePart")
+		wedge.Name = "Telhado"
+		wedge.Anchored = true
+		wedge.Size = roofSize
+		wedge.Color = poi.RoofColor or Color3.fromRGB(120, 62, 52)
+		wedge.Material = Enum.Material.RoofShingles
+		local turn = if side == 1 then CFrame.Angles(0, math.pi, 0) else CFrame.identity
+		wedge.CFrame = base * CFrame.new(0, HOUSE.Y + ROOF_HEIGHT / 2, side * roofSize.Z / 2) * turn
+		wedge.Parent = house
+	end
+
+	local front = -HOUSE.Z / 2
+	part(house, "Porta", Vector3.new(4, 7, 0.4), base * CFrame.new(0, 3.5, front - 0.2), COLORS.Wood, Enum.Material.Wood)
+	for _, x in { -5, 5 } do
+		part(house, "Janela", Vector3.new(3, 3, 0.2), base * CFrame.new(x, 6, front - 0.1), Color3.fromRGB(179, 229, 252), Enum.Material.Glass)
+	end
+
+	-- caminho da porta até a calçada
+	part(house, "Caminho", Vector3.new(4, 0.1, 9), base * CFrame.new(0, 0.05, front - 4.5), COLORS.Sidewalk, Enum.Material.Pavement)
+
+	-- caixa de correio (destino da missão de entrega)
+	local mailbox = base * CFrame.new(5.5, 0, front - PORCH_DEPTH + 1)
+	part(house, "PosteCorreio", Vector3.new(0.4, 3.2, 0.4), mailbox * CFrame.new(0, 1.6, 0), COLORS.Metal, Enum.Material.Metal)
+	local box = part(house, "CaixaDeCorreio", Vector3.new(1.6, 1.2, 2.2), mailbox * CFrame.new(0, 3.6, 0), Color3.fromRGB(229, 57, 53))
+	prompt(box, "Deliver", "Entregar encomenda", "Caixa de correio", { HouseId = poi.Id }, 0.5)
+
+	sign(body, poi.DisplayName, Vector3.new(0, HOUSE.Y / 2 + ROOF_HEIGHT + 2.5, 0), 13)
+end
+
+-- Mercado e Lanchonete: pavilhão aberto (dá para entrar por três lados)
+local function buildPavilion(map: Instance, poi: Poi)
+	local size = poi.Size or Vector3.new(30, 11, 20)
+	local facing = poi.Facing or Vector3.zAxis
+	local base = CFrame.lookAt(poi.Position, poi.Position + facing)
+	local color = poi.Color or Color3.new(1, 1, 1)
+	local building = model(map, poi.Id)
+
+	part(building, "Piso", Vector3.new(size.X, 0.2, size.Z), base * CFrame.new(0, 0.1, 0), Color3.fromRGB(240, 230, 210), Enum.Material.WoodPlanks)
+	for _, x in { -1, 1 } do
+		for _, z in { -1, 1 } do
+			part(building, "Coluna", Vector3.new(1, size.Y, 1), base * CFrame.new(x * (size.X / 2 - 0.5), size.Y / 2, z * (size.Z / 2 - 0.5)), Color3.new(1, 1, 1))
+		end
+	end
+	part(building, "Fundo", Vector3.new(size.X, size.Y, 0.6), base * CFrame.new(0, size.Y / 2, size.Z / 2 - 0.3), color, Enum.Material.Plaster)
+	local roof = part(building, "Telhado", Vector3.new(size.X + 2, 1, size.Z + 2), base * CFrame.new(0, size.Y + 0.5, 0), poi.RoofColor or color)
+	part(building, "Toldo", Vector3.new(size.X + 2, 2.5, 0.4), base * CFrame.new(0, size.Y - 0.6, -size.Z / 2 - 1.2), color)
+	part(building, "Balcao", Vector3.new(size.X - 8, 3.5, 2), base * CFrame.new(0, 1.75, size.Z / 2 - 3), COLORS.Wood, Enum.Material.WoodPlanks)
+
+	-- produtos coloridos no balcão (só decoração)
+	local palette = { Color3.fromRGB(239, 83, 80), Color3.fromRGB(255, 202, 40), Color3.fromRGB(102, 187, 106), Color3.fromRGB(66, 165, 245) }
+	for i = 1, 6 do
+		local x = -size.X / 2 + 6 + (i - 1) * (size.X - 12) / 5
+		part(building, "Produto", Vector3.new(1.4, 1.6, 1.4), base * CFrame.new(x, 4.3, size.Z / 2 - 3), palette[(i - 1) % #palette + 1])
+	end
+
+	sign(roof, poi.DisplayName, Vector3.new(0, 4, 0), 18)
+end
+
+local function buildPackageCounter(map: Instance)
+	local position = MapConfig.PackageCounter
+	local booth = model(map, "BalcaoEncomendas")
+	local counter = part(booth, "Balcao", Vector3.new(6, 3.5, 3), CFrame.new(position + Vector3.new(0, 1.75, 0)), COLORS.Wood, Enum.Material.WoodPlanks)
+	part(booth, "Caixas", Vector3.new(2, 1.5, 2), CFrame.new(position + Vector3.new(-1.5, 4.25, 0)), Color3.fromRGB(210, 170, 110), Enum.Material.Cardboard)
+	for _, x in { -2.8, 2.8 } do
+		part(booth, "Poste", Vector3.new(0.4, 8, 0.4), CFrame.new(position + Vector3.new(x, 4, 1.3)), COLORS.Metal, Enum.Material.Metal)
+	end
+	local cover = part(booth, "Cobertura", Vector3.new(8, 0.5, 5), CFrame.new(position + Vector3.new(0, 8.25, 0)), Color3.fromRGB(255, 133, 64))
+	prompt(counter, "Pickup", "Retirar encomenda", "Balcão de encomendas", {}, 0.5)
+	sign(cover, "Encomendas", Vector3.new(0, 2.5, 0), 11)
+end
+
+local function buildPlaza(map: Instance, poi: Poi)
+	local c = poi.Position
+	local plaza = model(map, poi.Id)
+
+	cylinder(plaza, "BaseChafariz", 1.6, 14, c + Vector3.new(0, 0.8, 0), Color3.fromRGB(189, 189, 189), Enum.Material.Concrete)
+	cylinder(plaza, "Agua", 0.3, 12, c + Vector3.new(0, 1.5, 0), COLORS.Water, Enum.Material.Glass).Transparency = 0.3
+	local column = cylinder(plaza, "Coluna", 4, 2, c + Vector3.new(0, 3, 0), Color3.fromRGB(224, 224, 224), Enum.Material.Marble)
+	ball(plaza, "Topo", 3, c + Vector3.new(0, 5.5, 0), COLORS.Water, Enum.Material.Glass)
+
+	for i = 0, 3 do
+		local angle = i * math.pi / 2
+		local seat = c + Vector3.new(math.cos(angle) * 32, 0, math.sin(angle) * 32)
+		bench(plaza, CFrame.lookAt(seat, Vector3.new(c.X, seat.Y, c.Z)))
+	end
+	for _, x in { -36, 36 } do
+		for _, z in { -36, 36 } do
+			tree(plaza, c + Vector3.new(x, 0, z))
+		end
+	end
+
+	sign(column, poi.DisplayName, Vector3.new(0, 8, 0), 18)
+end
+
+local function buildPark(map: Instance, poi: Poi)
+	local c = poi.Position
+	local park = model(map, poi.Id)
+
+	local trees = { { -30, -30 }, { 0, -34 }, { 30, -30 }, { 34, 0 }, { 30, 30 }, { 0, 34 }, { -34, 0 } }
+	for _, offset in trees do
+		tree(park, c + Vector3.new(offset[1], 0, offset[2]))
+	end
+	local pond = cylinder(park, "Lago", 0.3, 14, c + Vector3.new(-28, 0.15, 28), COLORS.Water, Enum.Material.Glass)
+	pond.Transparency = 0.2
+	for _, offset in { Vector3.new(0, 0, -24), Vector3.new(24, 0, 0), Vector3.new(0, 0, 24) } do
+		local seat = c + offset
+		bench(park, CFrame.lookAt(seat, Vector3.new(c.X, seat.Y, c.Z)))
+	end
+
+	local post = part(park, "PostePlaca", Vector3.new(0.6, 6, 0.6), CFrame.new(c + Vector3.new(36, 3, -36)), COLORS.Wood, Enum.Material.Wood)
+	sign(post, poi.DisplayName, Vector3.new(0, 5, 0), 12)
+end
+
+local function buildBusStop(map: Instance, poi: Poi)
+	local facing = poi.Facing or Vector3.zAxis
+	local center = poi.Position - facing * 5 -- abrigo atrás da área de espera
+	local base = CFrame.lookAt(center, center + facing)
+	local stop = model(map, poi.Id)
+
+	local back = part(stop, "Fundo", Vector3.new(16, 7, 0.5), base * CFrame.new(0, 4.5, 2.75), Color3.fromRGB(207, 234, 250), Enum.Material.Glass)
+	back.Transparency = 0.4
+	for _, x in { -7.5, 7.5 } do
+		part(stop, "Poste", Vector3.new(0.5, 8, 0.5), base * CFrame.new(x, 4, 2.75), COLORS.Metal, Enum.Material.Metal)
+	end
+	local cover = part(stop, "Cobertura", Vector3.new(18, 0.5, 7), base * CFrame.new(0, 8.25, 0), poi.Color or COLORS.Metal)
+	bench(stop, base * CFrame.new(0, 0, 1.2))
+	part(stop, "PostePlaca", Vector3.new(0.4, 9, 0.4), base * CFrame.new(-10, 4.5, -2), COLORS.Metal, Enum.Material.Metal)
+	part(stop, "PlacaOnibus", Vector3.new(2.4, 2.4, 0.2), base * CFrame.new(-10, 8.4, -2), Color3.fromRGB(30, 136, 229))
+
+	sign(cover, poi.DisplayName, Vector3.new(0, 3, 0), 16)
+end
+
+-- Esconderijos da missão "Achados e perdidos"
+local function buildSpot(map: Instance, spot: Spot)
+	local p = spot.Position
+	local target: BasePart
+	if spot.Kind == "Bush" then
+		target = ball(map, spot.Id, 5, p + Vector3.new(0, 2, 0), Color3.fromRGB(56, 142, 60), Enum.Material.LeafyGrass)
+	elseif spot.Kind == "Trash" then
+		target = cylinder(map, spot.Id, 3, 2.4, p + Vector3.new(0, 1.5, 0), Color3.fromRGB(46, 125, 50), Enum.Material.Metal)
+	else
+		target = part(map, spot.Id, Vector3.new(3, 3, 3), CFrame.new(p + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0.3, 0), COLORS.Wood, Enum.Material.WoodPlanks)
+		part(map, spot.Id .. "_Topo", Vector3.new(2.4, 2.4, 2.4), CFrame.new(p + Vector3.new(0.3, 4.2, 0.2)) * CFrame.Angles(0, -0.4, 0), COLORS.Wood, Enum.Material.WoodPlanks)
+	end
+	prompt(target, "Search", "Procurar", spot.DisplayName, { SpotId = spot.Id }, 1)
+end
+
+-- O SpawnLocation do lobby é o único do jogo: LoadCharacterAsync sempre nasce aqui
+local function buildLobby()
+	local cfg = MapConfig.Lobby
+	local c = cfg.Center
+	local size = cfg.Size
+	local lobby = model(workspace, "Lobby")
+
+	part(lobby, "Piso", Vector3.new(size, 2, size), CFrame.new(c - Vector3.new(0, 1, 0)), Color3.fromRGB(255, 236, 179), Enum.Material.WoodPlanks)
+	for _, side in { -1, 1 } do
+		local glassA = part(lobby, "Grade", Vector3.new(size, 12, 1), CFrame.new(c + Vector3.new(0, 6, side * (size / 2 - 0.5))), Color3.fromRGB(207, 234, 250), Enum.Material.Glass)
+		local glassB = part(lobby, "Grade", Vector3.new(1, 12, size), CFrame.new(c + Vector3.new(side * (size / 2 - 0.5), 6, 0)), Color3.fromRGB(207, 234, 250), Enum.Material.Glass)
+		glassA.Transparency = 0.6
+		glassB.Transparency = 0.6
+	end
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "LobbySpawn"
+	spawn.Anchored = true
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.Size = Vector3.new(10, 1, 10)
+	spawn.CFrame = CFrame.new(c + Vector3.new(0, 0.5, 8))
+	spawn.Color = Color3.fromRGB(255, 133, 64)
+	spawn.Material = Enum.Material.SmoothPlastic
+	spawn.Parent = lobby
+
+	local post = part(lobby, "Letreiro", Vector3.new(1, 1, 1), CFrame.new(c + Vector3.new(0, 4, -size / 2 + 6)), Color3.new(1, 1, 1))
+	post.Transparency = 1
+	post.CanCollide = false
+	sign(post, "<b>MEU VIZINHO É UM NPC</b>\nYuri22 &amp; Amigos", Vector3.new(0, 8, 0), 34, 8)
+end
+
+---------------------------------------------------------------------------
+-- API
+---------------------------------------------------------------------------
+
+function MapService.Start()
+	Lighting.ClockTime = 14
+	Lighting.Brightness = 2
+	Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 165)
+
+	buildLobby()
+
+	local map = Instance.new("Folder")
+	map.Name = "ActiveMap"
+	buildGround(map)
+	for _, block in MapConfig.Blocks do
+		buildBlock(map, block.X * MapConfig.BlockPitch, block.Z * MapConfig.BlockPitch, block.Type)
+	end
+
+	local builders: { [string]: (Instance, Poi) -> () } = {
+		House = buildHouse,
+		Market = buildPavilion,
+		Diner = buildPavilion,
+		Plaza = buildPlaza,
+		Park = buildPark,
+		BusStop = buildBusStop,
+	}
+	for _, poi in MapConfig.Pois do
+		local build = builders[poi.Building]
+		if build then
+			build(map, poi)
+		else
+			warn(`[MapService] tipo de prédio desconhecido: {poi.Building} ({poi.Id})`)
+		end
+	end
+	buildPackageCounter(map)
+
+	local hiding = Instance.new("Folder")
+	hiding.Name = "Esconderijos"
+	hiding.Parent = map
+	for _, spot in MapConfig.Spots do
+		buildSpot(hiding, spot)
+	end
+
+	map.Parent = workspace
+end
+
+-- Id do ponto de interesse onde a posição está (casas e lugares públicos), ou nil
+function MapService.GetPoiAt(position: Vector3): string?
+	if math.abs(position.Y - TOP) > 15 then
+		return nil
+	end
+	for _, poi in MapConfig.Pois do
+		local dx, dz = position.X - poi.Position.X, position.Z - poi.Position.Z
+		if dx * dx + dz * dz <= poi.ZoneRadius * poi.ZoneRadius then
+			return poi.Id
+		end
+	end
+	return nil
+end
+
+-- Ponto aleatório (na altura do quadril) dentro da área de parada de um POI
+function MapService.GetStandPoint(poiId: string, rng: Random): Vector3
+	local poi = poiById[poiId]
+	assert(poi, "POI desconhecido: " .. poiId)
+	local stand = poi.Stand
+	local center = poi.Position + (stand.Offset or Vector3.zero)
+	local minRadius = stand.MinRadius or 0
+	local angle = rng:NextNumber() * math.pi * 2
+	local radius = minRadius + (stand.Radius - minRadius) * math.sqrt(rng:NextNumber())
+	return Vector3.new(center.X + math.cos(angle) * radius, TOP + 3, center.Z + math.sin(angle) * radius)
+end
+
+return MapService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="22">
+        <Properties>
+          <string name="Name">MissionService</string>
+          <string name="Source"><![CDATA[--!strict
+-- Missões secretas de cada jogador: sorteio, progresso, avisos e resumo de recompensa.
+-- As regras ficam em Logic/MissionLogic; aqui só ligamos a lógica aos jogadores e à rede.
+-- Cada jogador só recebe as próprias missões (FireClient), nunca as dos outros.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local CharacterConfig = require(ReplicatedStorage.Shared.Config.CharacterConfig)
+local MapConfig = require(ReplicatedStorage.Shared.Config.MapConfig)
+local MissionConfig = require(ReplicatedStorage.Shared.Config.MissionConfig)
+local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local Types = require(ReplicatedStorage.Shared.Types)
+local MissionLogic = require(script.Parent.Parent.Logic.MissionLogic)
+
+type Mission = MissionLogic.Mission
+
+export type Summary = {
+	Views: { Types.MissionView },
+	Reward: number,
+	Completed: number,
+	AllDone: boolean, -- concluiu todas as missões que não foram canceladas
+}
+
+local MissionService = {}
+
+local missionsByPlayer: { [Player]: { Mission } } = {}
+
+-- Alvos fixos do mapa, montados uma vez
+local publicPois: { MissionLogic.Named } = {}
+local houses: { MissionLogic.Named } = {}
+for _, poi in MapConfig.Pois do
+	table.insert(if poi.Kind == "House" then houses else publicPois, { Id = poi.Id, Name = poi.DisplayName })
+end
+local spots: { MissionLogic.SpotRef } = {}
+for _, spot in MapConfig.Spots do
+	table.insert(spots, { Id = spot.Id, Area = spot.Area })
+end
+
+local function missionsOf(player: Player): { Mission }
+	return missionsByPlayer[player] or {}
+end
+
+function MissionService.GetViews(player: Player): { Types.MissionView }
+	local views = {}
+	for _, mission in missionsOf(player) do
+		table.insert(views, MissionLogic.View(mission))
+	end
+	return views
+end
+
+local function push(player: Player)
+	if player.Parent then
+		Remotes.MissionUpdate:FireClient(player, MissionService.GetViews(player))
+	end
+end
+
+local function announce(player: Player, mission: Mission)
+	if mission.Status == "Completed" then
+		Remotes.Notify:FireClient(player, "Success", `Missão concluída: {mission.Title} (+{mission.Reward} fichas no fim da rodada)`)
+	elseif mission.Status == "Failed" then
+		Remotes.Notify:FireClient(player, "Warning", `Missão falhou: {mission.Title}`)
+	elseif mission.Status == "Cancelled" then
+		Remotes.Notify:FireClient(player, "Info", `Missão cancelada (o morador-alvo saiu do jogo): {mission.Title}`)
+	end
+end
+
+-- residents: moradores ativos na partida (jogadores e NPCs, sem distinção)
+function MissionService.Assign(player: Player, residentId: string, role: string, residents: { MissionLogic.Named }, rng: Random)
+	local cfg = CharacterConfig.ById[residentId]
+	missionsByPlayer[player] = MissionLogic.Generate(MissionConfig.Templates, {
+		Role = role,
+		Count = GameConfig.MissionsPerPlayer,
+		Pool = cfg.MissionPool,
+		SelfResident = residentId,
+		Home = cfg.HomeId,
+		Residents = residents,
+		PublicPois = publicPois,
+		Houses = houses,
+		Spots = spots,
+		Now = workspace:GetServerTimeNow(),
+	}, rng)
+	push(player)
+end
+
+-- Evento validado pelo servidor. Retorna true se alguma missão do jogador avançou.
+function MissionService.Report(player: Player, event: string, targetId: string?): boolean
+	local consumed = false
+	for _, mission in missionsOf(player) do
+		if MissionLogic.Apply(mission, event, targetId) then
+			consumed = true
+			announce(player, mission)
+		end
+	end
+	if consumed then
+		push(player)
+	end
+	return consumed
+end
+
+-- Chamado a cada meio segundo pelo RoundService: prazos e missões de seguir alguém.
+-- distanceTo(player, residentId) devolve a distância atual até o morador (nil se ele sumiu).
+function MissionService.Tick(dt: number, distanceTo: (Player, string) -> number?)
+	local now = workspace:GetServerTimeNow()
+	for player, missions in missionsByPlayer do
+		local changed = false
+		for _, mission in missions do
+			local updated = MissionLogic.Expire(mission, now)
+			if not updated and mission.Type == "Follow" and mission.Status == "Active" then
+				updated = MissionLogic.TickFollow(mission, dt, distanceTo(player, mission.Targets[1]))
+			end
+			if updated then
+				changed = true
+				announce(player, mission)
+			end
+		end
+		if changed then
+			push(player)
+		end
+	end
+end
+
+function MissionService.CancelTargeting(residentId: string)
+	for player, missions in missionsByPlayer do
+		local changed = false
+		for _, mission in missions do
+			if MissionLogic.CancelIfTarget(mission, residentId) then
+				changed = true
+				announce(player, mission)
+			end
+		end
+		if changed then
+			push(player)
+		end
+	end
+end
+
+function MissionService.AnyActive(): boolean
+	for _, missions in missionsByPlayer do
+		for _, mission in missions do
+			if mission.Status == "Active" then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Fim da rodada: o que ficou aberto falha (sem aviso individual; aparece no resultado)
+function MissionService.FinishRound()
+	for player, missions in missionsByPlayer do
+		for _, mission in missions do
+			MissionLogic.Finish(mission)
+		end
+		push(player)
+	end
+end
+
+function MissionService.GetSummary(player: Player): Summary
+	local reward, completed, counted = 0, 0, 0
+	for _, mission in missionsOf(player) do
+		if mission.Status == "Completed" then
+			reward += mission.Reward
+			completed += 1
+		end
+		if mission.Status ~= "Cancelled" then
+			counted += 1
+		end
+	end
+	return {
+		Views = MissionService.GetViews(player),
+		Reward = reward,
+		Completed = completed,
+		AllDone = counted > 0 and completed == counted,
+	}
+end
+
+function MissionService.RemovePlayer(player: Player)
+	missionsByPlayer[player] = nil
+end
+
+function MissionService.Clear()
+	for player in missionsByPlayer do
+		if player.Parent then
+			Remotes.MissionUpdate:FireClient(player, {})
+		end
+	end
+	table.clear(missionsByPlayer)
+end
+
+return MissionService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="23">
+        <Properties>
+          <string name="Name">NPCService</string>
+          <string name="Source"><![CDATA[--!strict
+-- NPCs moradores: cria o modelo, anda pelo bairro com PathfindingService e executa a rotina
+-- escolhida pelo RoutinePlanner. Máquina de estados da Fase 1:
+--   Idle -> Walking/ReturningHome -> Working/Shopping/Idle (no destino), Talking (interrompido).
+-- Cada NPC roda numa thread que passa a maior parte do tempo dormindo; NPCs longe de todos os
+-- jogadores verificam o movimento com menos frequência.
+
+local Players = game:GetService("Players")
+local PathfindingService = game:GetService("PathfindingService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+
+local AssetConfig = require(ReplicatedStorage.Shared.Config.AssetConfig)
+local CharacterConfig = require(ReplicatedStorage.Shared.Config.CharacterConfig)
+local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
+local MapConfig = require(ReplicatedStorage.Shared.Config.MapConfig)
+local RoutineConfig = require(ReplicatedStorage.Shared.Config.RoutineConfig)
+local RoutinePlanner = require(script.Parent.Parent.Logic.RoutinePlanner)
+local CharacterService = require(script.Parent.CharacterService)
+local MapService = require(script.Parent.MapService)
+
+type Character = CharacterConfig.Character
+
+type NPC = {
+	Id: string,
+	Config: Character,
+	Model: Model,
+	Humanoid: Humanoid,
+	Root: BasePart,
+	Path: Path,
+	Planner: RoutinePlanner.Planner,
+	Rng: Random,
+	State: string,
+	CurrentPoi: string?,
+	PausedUntil: number,
+	Active: boolean,
+	Connections: { RBXScriptConnection },
+}
+
+local NPCService = {}
+
+local AGENT = {
+	AgentRadius = 2,
+	AgentHeight = 5,
+	AgentCanJump = false,
+	AgentCanClimb = false,
+	WaypointSpacing = 10,
+	Costs = { Asphalt = 4, Grass = 2 }, -- prefere calçadas, como um morador de verdade
+}
+local MAX_PATH_ATTEMPTS = 3
+local STAND_POINT_ATTEMPTS = 2
+local RESPAWN_DELAY = 5
+local DISCREET_DISTANCE = 80 -- teleporte de emergência só se nenhum jogador estiver perto
+
+local npcs: { [string]: NPC } = {}
+local roundActive = false
+local getTimeLeft: () -> number = function()
+	return math.huge
+end
+
+local function folder(parent: Instance, name: string): Folder
+	local existing = parent:FindFirstChild(name)
+	if existing and existing:IsA("Folder") then
+		return existing
+	end
+	local created = Instance.new("Folder")
+	created.Name = name
+	created.Parent = parent
+	return created
+end
+
+-- Modelos-base ficam em ServerStorage.NPCModels e são clonados a cada rodada.
+-- Um Model com o mesmo ModelName colocado lá manualmente é usado no lugar do gerado.
+local templates = folder(ServerStorage, "NPCModels")
+local residentsFolder = folder(workspace, "Residents")
+
+local neighborsOf: { [string]: { string } } = {}
+for _, cfg in CharacterConfig.List do
+	local list = {}
+	for _, poi in MapConfig.Pois do
+		if poi.Kind == "House" and poi.Id ~= cfg.HomeId then
+			table.insert(list, poi.Id)
+		end
+	end
+	neighborsOf[cfg.CharacterId] = list
+end
+
+local function getTemplate(cfg: Character): Model?
+	local existing = templates:FindFirstChild(cfg.ModelName)
+	if existing and existing:IsA("Model") then
+		return existing
+	end
+	local ok, result = pcall(function()
+		return Players:CreateHumanoidModelFromDescriptionAsync(CharacterService.GetDescription(cfg):Clone(), Enum.HumanoidRigType.R15)
+	end)
+	if not ok then
+		warn(`[NPCService] não foi possível criar o modelo de {cfg.CharacterId}: {result}`)
+		return nil
+	end
+	result.Name = cfg.ModelName
+	result.Parent = templates
+	return result
+end
+
+local function isNearAnyPlayer(position: Vector3, distance: number): boolean
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		local root = character and character.PrimaryPart
+		if root and (root.Position - position).Magnitude <= distance then
+			return true
+		end
+	end
+	return false
+end
+
+local function pollInterval(npc: NPC): number
+	return if isNearAnyPlayer(npc.Root.Position, GameConfig.NPCNearPlayerDistance) then 0.1 else 0.5
+end
+
+-- Para enquanto alguém conversa com o NPC
+local function holdIfTalking(npc: NPC)
+	if os.clock() >= npc.PausedUntil then
+		return
+	end
+	local previous = npc.State
+	npc.State = "Talking"
+	while npc.Active and os.clock() < npc.PausedUntil do
+		task.wait(0.2)
+	end
+	npc.State = previous
+end
+
+local function waitFor(npc: NPC, seconds: number)
+	local deadline = os.clock() + seconds
+	while npc.Active and os.clock() < deadline do
+		holdIfTalking(npc)
+		task.wait(math.clamp(deadline - os.clock(), 0.05, 1))
+	end
+end
+
+local function moveTo(npc: NPC, target: Vector3): boolean
+	local humanoid = npc.Humanoid
+	local reached: boolean? = nil
+	local connection = humanoid.MoveToFinished:Once(function(success)
+		reached = success
+	end)
+	humanoid:MoveTo(target)
+	local distance = (target - npc.Root.Position).Magnitude
+	local deadline = os.clock() + distance / math.max(humanoid.WalkSpeed, 1) + 2
+	while reached == nil and npc.Active and os.clock() < deadline do
+		task.wait(pollInterval(npc))
+	end
+	connection:Disconnect()
+	return reached == true
+end
+
+-- Segue um caminho calculado; recalcula se o caminho for bloqueado (até MAX_PATH_ATTEMPTS)
+local function followPath(npc: NPC, target: Vector3): boolean
+	local path = npc.Path
+	for attempt = 1, MAX_PATH_ATTEMPTS do
+		if not npc.Active then
+			return false
+		end
+		local computed = pcall(path.ComputeAsync, path, npc.Root.Position, target)
+		if computed and path.Status == Enum.PathStatus.Success then
+			local waypoints = path:GetWaypoints()
+			local current = 1
+			local blocked = false
+			local connection = path.Blocked:Connect(function(index)
+				if index >= current then
+					blocked = true
+				end
+			end)
+			for i = 2, #waypoints do
+				current = i
+				holdIfTalking(npc)
+				if blocked or not npc.Active or not moveTo(npc, waypoints[i].Position) then
+					blocked = true
+					break
+				end
+			end
+			connection:Disconnect()
+			if not blocked then
+				return true
+			end
+		end
+		task.wait(0.3 * attempt)
+	end
+	return false
+end
+
+local function walkToPoi(npc: NPC, poiId: string): boolean
+	for _ = 1, STAND_POINT_ATTEMPTS do
+		if followPath(npc, MapService.GetStandPoint(poiId, npc.Rng)) then
+			return true
+		end
+		if not npc.Active then
+			return false
+		end
+	end
+	local target = MapService.GetStandPoint(poiId, npc.Rng)
+	if moveTo(npc, target) then
+		return true
+	end
+	-- último recurso para NPC preso: teleporte, mas só se ninguém estiver vendo
+	if not isNearAnyPlayer(npc.Root.Position, DISCREET_DISTANCE) and not isNearAnyPlayer(target, DISCREET_DISTANCE) then
+		npc.Model:PivotTo(CFrame.new(target))
+		return true
+	end
+	return false
+end
+
+local function runBrain(npc: NPC)
+	-- "acordando": cada morador sai de casa num momento diferente
+	waitFor(npc, 1 + npc.Rng:NextNumber() * 5)
+	while npc.Active do
+		local activity = npc.Planner.Next({ TimeLeft = getTimeLeft(), CurrentPoi = npc.CurrentPoi })
+		if activity.Delay > 0 then
+			npc.State = "Idle"
+			waitFor(npc, activity.Delay)
+		end
+		if not npc.Active then
+			break
+		end
+		if activity.PoiId ~= npc.CurrentPoi then
+			npc.State = if activity.IsHome then "ReturningHome" else "Walking"
+			if walkToPoi(npc, activity.PoiId) then
+				npc.CurrentPoi = activity.PoiId
+			else
+				npc.CurrentPoi = MapService.GetPoiAt(npc.Root.Position)
+				npc.State = "Idle"
+				waitFor(npc, 2)
+				continue
+			end
+		end
+		npc.State = activity.State
+		waitFor(npc, activity.Duration)
+	end
+end
+
+local function loadTrack(animator: Animator, animationId: string?): AnimationTrack?
+	if not animationId or animationId == "" then
+		return nil
+	end
+	local animation = Instance.new("Animation")
+	animation.AnimationId = animationId
+	local ok, track = pcall(animator.LoadAnimation, animator, animation)
+	if not ok then
+		warn(`[NPCService] animação {animationId} não carregou: {track}`)
+		return nil
+	end
+	track.Looped = true
+	return track
+end
+
+-- Mesma mistura caminhada/corrida do script Animate padrão do R15, para o NPC andar igual a um jogador
+local function setupAnimations(npc: NPC)
+	local humanoid = npc.Humanoid
+	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator")
+	animator.Parent = humanoid
+	local overrides = npc.Config.AnimationConfig
+	local defaults = AssetConfig.Animations
+	local idle = loadTrack(animator, overrides.Idle or defaults.Idle)
+	local walk = loadTrack(animator, overrides.Walk or defaults.Walk)
+	local run = loadTrack(animator, overrides.Run or defaults.Run)
+	if idle then
+		idle:Play()
+	end
+
+	local moving = false
+	table.insert(
+		npc.Connections,
+		humanoid.Running:Connect(function(speed)
+			if speed <= 0.75 then
+				if moving then
+					moving = false
+					if walk then
+						walk:Stop(0.2)
+					end
+					if run then
+						run:Stop(0.2)
+					end
+					if idle then
+						idle:Play(0.2)
+					end
+				end
+				return
+			end
+			if not moving then
+				moving = true
+				if idle then
+					idle:Stop(0.2)
+				end
+				if walk then
+					walk:Play(0.2)
+				end
+				if run then
+					run:Play(0.2)
+				end
+			end
+			local heightScale = math.max(humanoid.HipHeight / 2, 0.1)
+			local runSpeed = speed / 16 * 1.25 / heightScale
+			local walkWeight, runWeight, walkRate, runRate = 1, 0.0001, runSpeed / 0.5, runSpeed
+			if runSpeed >= 1 then
+				walkWeight, runWeight = 0.0001, 1
+			elseif runSpeed > 0.5 then
+				local fade = (runSpeed - 0.5) / 0.5
+				walkWeight, runWeight, walkRate, runRate = 1 - fade, fade, 1, 1
+			end
+			if walk then
+				walk:AdjustWeight(walkWeight)
+				walk:AdjustSpeed(walkRate)
+			end
+			if run then
+				run:AdjustWeight(runWeight)
+				run:AdjustSpeed(runRate)
+			end
+		end)
+	)
+end
+
+local function despawn(npc: NPC)
+	npc.Active = false
+	for _, connection in npc.Connections do
+		connection:Disconnect()
+	end
+	table.clear(npc.Connections)
+	if npcs[npc.Id] == npc then
+		npcs[npc.Id] = nil
+	end
+	npc.Model:Destroy()
+end
+
+-- NPC caiu do mapa, morreu ou foi apagado por algum script: some e reaparece em casa
+local function onLost(npc: NPC)
+	if not npc.Active then
+		return
+	end
+	despawn(npc)
+	warn(`[NPCService] {npc.Id} foi removido inesperadamente; reaparece em {RESPAWN_DELAY}s`)
+	task.delay(RESPAWN_DELAY, function()
+		if roundActive and not npcs[npc.Id] then
+			NPCService.Spawn(npc.Id, npc.Rng:NextInteger(1, 1_000_000_000))
+		end
+	end)
+end
+
+function NPCService.Spawn(residentId: string, seed: number)
+	local cfg = CharacterConfig.ById[residentId]
+	local template = cfg and getTemplate(cfg)
+	if not cfg or not template or npcs[residentId] or not roundActive then
+		return
+	end
+	local model = template:Clone()
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root or not root:IsA("BasePart") then
+		warn(`[NPCService] modelo de {residentId} sem Humanoid/HumanoidRootPart`)
+		model:Destroy()
+		return
+	end
+
+	local rng = Random.new(seed)
+	local routine = RoutineConfig.Types[cfg.RoutineType] or RoutineConfig.Types.Caseiro
+	local npc: NPC = {
+		Id = residentId,
+		Config = cfg,
+		Model = model,
+		Humanoid = humanoid,
+		Root = root,
+		Path = PathfindingService:CreatePath(AGENT),
+		Planner = RoutinePlanner.new(
+			routine,
+			{ Home = cfg.HomeId, Work = cfg.WorkPoi, Neighbors = neighborsOf[residentId] },
+			cfg.Personality,
+			GameConfig.NPCReturnHomeTime,
+			rng
+		),
+		Rng = rng,
+		State = "Idle",
+		CurrentPoi = cfg.HomeId,
+		PausedUntil = 0,
+		Active = true,
+		Connections = {},
+	}
+
+	CharacterService.SetupResident(model, cfg)
+	CharacterService.ApplyCollisionGroup(model)
+	model:PivotTo(CFrame.new(MapService.GetStandPoint(cfg.HomeId, rng)))
+	model.Parent = residentsFolder
+	-- física do NPC sempre no servidor: evita trancos quando um jogador chega perto
+	pcall(root.SetNetworkOwner, root, nil)
+	npcs[residentId] = npc
+
+	setupAnimations(npc)
+	table.insert(npc.Connections, humanoid.Died:Connect(function()
+		onLost(npc)
+	end))
+	table.insert(npc.Connections, model.AncestryChanged:Connect(function()
+		if not model:IsDescendantOf(workspace) then
+			onLost(npc)
+		end
+	end))
+	task.spawn(runBrain, npc)
+end
+
+-- Um jogador puxou conversa: o NPC para, vira para ele e retoma a rotina depois
+function NPCService.Interrupt(residentId: string, lookAt: Vector3, seconds: number)
+	local npc = npcs[residentId]
+	if not npc or not npc.Active then
+		return
+	end
+	npc.PausedUntil = os.clock() + seconds
+	local root = npc.Root
+	npc.Humanoid:MoveTo(root.Position)
+	root.CFrame = CFrame.lookAt(root.Position, Vector3.new(lookAt.X, root.Position.Y, lookAt.Z))
+end
+
+function NPCService.GetModel(residentId: string): Model?
+	local npc = npcs[residentId]
+	return if npc then npc.Model else nil
+end
+
+function NPCService.BeginRound(timeLeft: () -> number)
+	roundActive = true
+	getTimeLeft = timeLeft
+end
+
+function NPCService.DespawnAll()
+	roundActive = false
+	for _, npc in npcs do
+		despawn(npc)
+	end
+	table.clear(npcs)
+end
+
+return NPCService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="24">
+        <Properties>
+          <string name="Name">RoundService</string>
+          <string name="Source"><![CDATA[--!strict
+-- Ciclo da partida: Lobby -> Intermission -> Preparing -> Playing -> Results -> Lobby.
+-- É a única fonte de verdade sobre quem participa e quem está disfarçado de qual morador.
+-- O estado público (fase e relógio) vai em atributos de ReplicatedStorage.GameState; quem é
+-- jogador ou NPC só é revelado na tela de resultado.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local CharacterConfig = require(ReplicatedStorage.Shared.Config.CharacterConfig)
+local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
+local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local Types = require(ReplicatedStorage.Shared.Types)
+local MatchSetup = require(script.Parent.Parent.Logic.MatchSetup)
+local CharacterService = require(script.Parent.CharacterService)
+local EconomyService = require(script.Parent.EconomyService)
+local MapService = require(script.Parent.MapService)
+local MissionService = require(script.Parent.MissionService)
+local NPCService = require(script.Parent.NPCService)
+
+export type Resident = {
+	Id: string,
+	Name: string,
+	Player: Player?, -- nil = NPC (ou jogador que saiu)
+	PlayerName: string?, -- guardado para a revelação final
+	Present: boolean,
+}
+
+type Match = {
+	Id: number,
+	Residents: { [string]: Resident },
+	Order: { string },
+	ResidentOf: { [Player]: string }, -- só jogadores que ainda estão na partida
+	EndsAt: number, -- os.clock(); 0 enquanto prepara
+}
+
+local RoundService = {}
+
+local TICK = 0.5
+local REASONS = {
+	Timeout = "O tempo acabou!",
+	AllDone = "Todas as missões foram resolvidas!",
+	Empty = "Todos os jogadores da partida saíram.",
+}
+
+local phase = "Lobby"
+local match: Match? = nil
+local roundCounter = 0
+local lastStateRequest: { [Player]: number } = {}
+
+local function setPhase(newPhase: string, duration: number?)
+	phase = newPhase
+	Remotes.GameState:SetAttribute("Phase", newPhase)
+	Remotes.GameState:SetAttribute("PhaseEndsAt", if duration then workspace:GetServerTimeNow() + duration else 0)
+end
+
+function RoundService.GetPhase(): string
+	return phase
+end
+
+function RoundService.GetResidentIdOf(player: Player): string?
+	local m = match
+	return if m then m.ResidentOf[player] else nil
+end
+
+-- Morador ativo (presente no bairro), seja jogador ou NPC
+function RoundService.GetResident(residentId: string): Resident?
+	local m = match
+	local resident = m and m.Residents[residentId]
+	return if resident and resident.Present then resident else nil
+end
+
+local function playerState(player: Player): Types.PlayerState
+	local residentId = RoundService.GetResidentIdOf(player)
+	local resident = if residentId then RoundService.GetResident(residentId) else nil
+	return {
+		InRound = resident ~= nil,
+		ResidentId = residentId,
+		ResidentName = if resident then resident.Name else nil,
+	}
+end
+
+local function rootOf(model: Model?): BasePart?
+	local root = model and model:FindFirstChild("HumanoidRootPart")
+	return if root and root:IsA("BasePart") then root else nil
+end
+
+local function residentModel(residentId: string): Model?
+	local resident = RoundService.GetResident(residentId)
+	if not resident then
+		return nil
+	end
+	if resident.Player then
+		return resident.Player.Character
+	end
+	return NPCService.GetModel(residentId)
+end
+
+local function distanceTo(player: Player, residentId: string): number?
+	local a = rootOf(player.Character)
+	local b = rootOf(residentModel(residentId))
+	return if a and b then (a.Position - b.Position).Magnitude else nil
+end
+
+local function homeCFrame(residentId: string, rng: Random): CFrame
+	return CFrame.new(MapService.GetStandPoint(CharacterConfig.ById[residentId].HomeId, rng))
+end
+
+local function cleanup(m: Match)
+	NPCService.DespawnAll()
+	MissionService.Clear()
+	if match == m then
+		match = nil
+	end
+	for player in m.ResidentOf do
+		if player.Parent then
+			Remotes.PlayerState:FireClient(player, playerState(player))
+			task.spawn(CharacterService.SpawnInLobby, player)
+		end
+	end
+	setPhase("Lobby")
+end
+
+local function finishRound(m: Match, reason: string)
+	setPhase("Results", GameConfig.ResultsTime)
+	MissionService.FinishRound()
+
+	local reveal: { Types.RevealEntry } = {}
+	for _, id in m.Order do
+		local resident = m.Residents[id]
+		table.insert(reveal, { ResidentName = resident.Name, PlayerName = resident.PlayerName })
+	end
+
+	for _, player in Players:GetPlayers() do
+		local residentId = m.ResidentOf[player]
+		local result: Types.RoundResult = {
+			Reason = REASONS[reason] or reason,
+			Participated = residentId ~= nil,
+			Won = false,
+			Missions = {},
+			Earned = 0,
+			Breakdown = {},
+			Reveal = reveal,
+		}
+		if residentId then
+			local summary = MissionService.GetSummary(player)
+			local breakdown = { { Label = "Participação", Amount = GameConfig.ParticipationReward } }
+			if summary.Reward > 0 then
+				table.insert(breakdown, { Label = `Missões concluídas ({summary.Completed})`, Amount = summary.Reward })
+			end
+			if summary.AllDone then
+				table.insert(breakdown, { Label = "Bônus: todas as missões", Amount = GameConfig.AllMissionsBonus })
+			end
+			local total = 0
+			for _, line in breakdown do
+				total += line.Amount
+			end
+			-- a chave da rodada garante pagamento único mesmo se este trecho rodar de novo
+			local paid = EconomyService.Grant(player, total, `round:{m.Id}`)
+			result.Won = summary.AllDone
+			result.ResidentName = m.Residents[residentId].Name
+			result.Missions = summary.Views
+			result.Earned = if paid then total else 0
+			result.Breakdown = breakdown
+		end
+		Remotes.RoundResult:FireClient(player, result)
+	end
+
+	if reason ~= "Empty" then
+		task.wait(GameConfig.ResultsTime)
+	end
+	cleanup(m)
+end
+
+local function playLoop(m: Match): string
+	local lastPoi: { [Player]: string? } = {}
+	while true do
+		local dt = task.wait(TICK)
+		-- "visitar lugar" é detectado aqui, pela posição, sem confiar no cliente
+		for player in m.ResidentOf do
+			local root = rootOf(player.Character)
+			if root then
+				local poi = MapService.GetPoiAt(root.Position)
+				if poi and poi ~= lastPoi[player] then
+					MissionService.Report(player, "EnterPoi", poi)
+				end
+				lastPoi[player] = poi
+			end
+		end
+		MissionService.Tick(dt, distanceTo)
+
+		if next(m.ResidentOf) == nil then
+			return "Empty"
+		elseif os.clock() >= m.EndsAt then
+			return "Timeout"
+		elseif not MissionService.AnyActive() then
+			return "AllDone"
+		end
+	end
+end
+
+local function runRound()
+	roundCounter += 1
+	local seed = GameConfig.FixedSeed or Random.new():NextInteger(1, 2_000_000_000)
+	local rng = Random.new(seed)
+	print(`[RoundService] rodada {roundCounter} | seed {seed}`)
+	setPhase("Preparing")
+
+	local maxPlayers = MatchSetup.MaxPlayers(#CharacterConfig.List, GameConfig.MaxParticipants, GameConfig.MinNPCs)
+	local players = MatchSetup.Shuffle(Players:GetPlayers(), rng)
+	while #players > maxPlayers do
+		table.remove(players)
+	end
+	local residentIds = MatchSetup.PickResidents(CharacterConfig.List, #players, GameConfig, rng)
+	local residentOf, npcIds = MatchSetup.AssignPlayers(residentIds, players, rng)
+
+	local m: Match = { Id = roundCounter, Residents = {}, Order = residentIds, ResidentOf = residentOf, EndsAt = 0 }
+	for _, id in residentIds do
+		m.Residents[id] = { Id = id, Name = CharacterConfig.ById[id].DisplayName, Present = true }
+	end
+	for player, id in residentOf do
+		m.Residents[id].Player = player
+		m.Residents[id].PlayerName = `{player.DisplayName} (@{player.Name})`
+	end
+	match = m
+
+	NPCService.BeginRound(function()
+		return if m.EndsAt == 0 then GameConfig.RoundDuration else math.max(0, m.EndsAt - os.clock())
+	end)
+	for i, id in npcIds do
+		task.spawn(NPCService.Spawn, id, seed + i)
+	end
+
+	-- jogadores nascem disfarçados na porta de casa, igual aos NPCs
+	local pending = 0
+	for player, id in residentOf do
+		pending += 1
+		local spawnAt = homeCFrame(id, rng)
+		task.spawn(function()
+			CharacterService.SpawnAsResident(player, CharacterConfig.ById[id], spawnAt)
+			pending -= 1
+		end)
+	end
+	local deadline = os.clock() + 15
+	while pending > 0 and os.clock() < deadline do
+		task.wait(0.2)
+	end
+
+	-- quem saiu durante a preparação não pode virar alvo de missão
+	local residentList = {}
+	for _, id in residentIds do
+		if m.Residents[id].Present then
+			table.insert(residentList, { Id = id, Name = m.Residents[id].Name })
+		end
+	end
+	for player, id in residentOf do
+		if player.Parent then
+			MissionService.Assign(player, id, "Morador", residentList, rng)
+			Remotes.PlayerState:FireClient(player, playerState(player))
+			Remotes.Notify:FireClient(player, "Info", `Você é {m.Residents[id].Name}! Aja como um morador comum e cumpra suas missões secretas.`, "Seu disfarce")
+		end
+	end
+
+	m.EndsAt = os.clock() + GameConfig.RoundDuration
+	setPhase("Playing", GameConfig.RoundDuration)
+	finishRound(m, playLoop(m))
+end
+
+local function onPlayerRemoving(player: Player)
+	lastStateRequest[player] = nil
+	local m = match
+	local residentId = if m then m.ResidentOf[player] else nil
+	if not m or not residentId then
+		return
+	end
+	local resident = m.Residents[residentId]
+	m.ResidentOf[player] = nil
+	resident.Present = false
+	resident.Player = nil
+	resident.PlayerName = (resident.PlayerName or player.Name) .. " (saiu)"
+	MissionService.RemovePlayer(player)
+	MissionService.CancelTargeting(residentId)
+end
+
+local function respawn(player: Player)
+	local m = match
+	local residentId = if m and (phase == "Playing" or phase == "Preparing") then m.ResidentOf[player] else nil
+	if residentId then
+		CharacterService.SpawnAsResident(player, CharacterConfig.ById[residentId], homeCFrame(residentId, Random.new()))
+	else
+		CharacterService.SpawnInLobby(player)
+	end
+end
+
+local function mainLoop()
+	while true do
+		setPhase("Lobby")
+		while #Players:GetPlayers() < GameConfig.MinPlayers do
+			task.wait(1)
+		end
+
+		setPhase("Intermission", GameConfig.IntermissionTime)
+		local startsAt = os.clock() + GameConfig.IntermissionTime
+		local enough = true
+		while os.clock() < startsAt do
+			if #Players:GetPlayers() < GameConfig.MinPlayers then
+				enough = false
+				break
+			end
+			task.wait(0.5)
+		end
+
+		if enough then
+			local ok, err = pcall(runRound :: any)
+			if not ok then
+				-- qualquer erro inesperado devolve todos ao lobby e o ciclo recomeça
+				warn(`[RoundService] erro na rodada, reiniciando: {err}`)
+				local m = match
+				if m then
+					pcall(cleanup, m)
+				else
+					NPCService.DespawnAll()
+					MissionService.Clear()
+				end
+			end
+		end
+	end
+end
+
+function RoundService.Start()
+	CharacterService.SetRespawnHandler(respawn)
+	Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+	-- única chamada cliente -> servidor: somente leitura dos próprios dados, com limite de frequência
+	Remotes.GetPlayerState.OnServerInvoke = function(player: Player)
+		local now = os.clock()
+		if now - (lastStateRequest[player] or -math.huge) < 1 then
+			return nil
+		end
+		lastStateRequest[player] = now
+		return { State = playerState(player), Missions = MissionService.GetViews(player) }
+	end
+
+	task.spawn(mainLoop)
+end
+
+return RoundService
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="25">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="26">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="LocalScript" referent="27">
+        <Properties>
+          <string name="Name">ClientBootstrap</string>
+          <string name="Source"><![CDATA[--!strict
+-- Ponto de entrada do cliente: liga os controllers (que conectam os eventos) e só então pede ao
+-- servidor o estado atual, para não perder nenhuma atualização enviada nesse meio tempo.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
+local Controllers = script.Parent:WaitForChild("Controllers")
+local UIController = require(Controllers:WaitForChild("UIController"))
+local MissionController = require(Controllers:WaitForChild("MissionController"))
+local InteractionController = require(Controllers:WaitForChild("InteractionController"))
+
+local steps: { { Name: string, Start: () -> () } } = {
+	{ Name = "UIController", Start = UIController.Start },
+	{ Name = "MissionController", Start = MissionController.Start },
+	{ Name = "InteractionController", Start = InteractionController.Start },
+}
+for _, step in steps do
+	local ok, err = pcall(step.Start :: any)
+	if not ok then
+		warn(`[Cliente] falha ao iniciar {step.Name}: {err}`)
+	end
+end
+
+local ok, snapshot = pcall(function()
+	return Remotes.GetPlayerState:InvokeServer()
+end)
+if ok and type(snapshot) == "table" then
+	UIController.ApplyPlayerState(snapshot.State)
+	MissionController.ApplyMissions(snapshot.Missions)
+end
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Folder" referent="28">
+        <Properties>
+          <string name="Name">Controllers</string>
+        </Properties>
+        <Item class="ModuleScript" referent="29">
+          <Properties>
+            <string name="Name">InteractionController</string>
+            <string name="Source"><![CDATA[--!strict
+-- Ajustes locais de interação:
+--  * esconde o "Conversar" do próprio personagem (o servidor coloca o prompt em todo morador,
+--    jogador ou NPC, para que a presença do prompt não denuncie ninguém);
+--  * desliga o botão de reset: um morador que "morre" do nada seria uma pista injusta.
+
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+
+local InteractionController = {}
+
+local function hideOwnTalkPrompt(character: Model)
+	local function check(instance: Instance)
+		if instance:IsA("ProximityPrompt") and instance.Name == "TalkPrompt" then
+			instance.Enabled = false -- só neste cliente; os outros continuam vendo
+		end
+	end
+	for _, descendant in character:GetDescendants() do
+		check(descendant)
+	end
+	character.DescendantAdded:Connect(check)
+end
+
+function InteractionController.Start()
+	local player = Players.LocalPlayer
+	if player.Character then
+		hideOwnTalkPrompt(player.Character)
+	end
+	player.CharacterAdded:Connect(hideOwnTalkPrompt)
+
+	-- SetCore só funciona depois que os scripts internos do Roblox carregam
+	task.spawn(function()
+		for _ = 1, 20 do
+			if pcall(StarterGui.SetCore, StarterGui, "ResetButtonCallback", false) then
+				return
+			end
+			task.wait(0.5)
+		end
+	end)
+end
+
+return InteractionController
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="30">
+          <Properties>
+            <string name="Name">MissionController</string>
+            <string name="Source"><![CDATA[--!strict
+-- Painel das missões secretas. O servidor envia só as missões deste jogador, já com textos e
+-- progresso calculados; aqui apenas desenhamos. Em telas pequenas começa recolhido.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local Types = require(Shared:WaitForChild("Types"))
+local UIKit = require(script.Parent.Parent:WaitForChild("UI"):WaitForChild("UIKit"))
+
+local Theme = UIKit.Theme
+
+local MissionController = {}
+
+local STATUS_STYLE: { [string]: { Color: Color3, Icon: string, Text: string } } = {
+	Active = { Color = Theme.Accent, Icon = "⏳", Text = "em andamento" },
+	Completed = { Color = Theme.Success, Icon = "✅", Text = "concluída" },
+	Failed = { Color = Theme.Danger, Icon = "❌", Text = "falhou" },
+	Cancelled = { Color = Theme.InkSoft, Icon = "➖", Text = "cancelada" },
+}
+
+local missions: { Types.MissionView } = {}
+local countdowns: { { Label: TextLabel, Text: string, ExpiresAt: number } } = {}
+local collapsed = UIKit.isSmallScreen()
+
+local gui = UIKit.screen("MissionUI", 2)
+
+local panel = UIKit.frame(gui, "Painel", UDim2.fromOffset(300, 0), Theme.Panel)
+panel.Position = UDim2.fromOffset(12, 84)
+panel.AutomaticSize = Enum.AutomaticSize.Y
+panel.Visible = false
+UIKit.corner(panel, 14)
+UIKit.stroke(panel, Theme.Ink, 2)
+UIKit.padding(panel, 10)
+UIKit.list(panel, 8)
+UIKit.scaled(panel)
+
+local header = UIKit.button(panel, "", Theme.Ink)
+header.Size = UDim2.new(1, 0, 0, 34)
+header.TextSize = 17
+header.TextXAlignment = Enum.TextXAlignment.Left
+local headerPadding = Instance.new("UIPadding")
+headerPadding.PaddingLeft = UDim.new(0, 10)
+headerPadding.Parent = header
+
+local list = UIKit.frame(panel, "Lista", UDim2.fromScale(1, 0))
+list.LayoutOrder = 1
+list.AutomaticSize = Enum.AutomaticSize.Y
+UIKit.list(list, 8)
+
+local function updateHeader()
+	local done = 0
+	for _, mission in missions do
+		if mission.Status == "Completed" then
+			done += 1
+		end
+	end
+	header.Text = `📋 Missões secretas  {done}/{#missions}   {if collapsed then "▸" else "▾"}`
+	list.Visible = not collapsed
+end
+
+local function render()
+	for _, child in list:GetChildren() do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+	table.clear(countdowns)
+
+	for index, mission in missions do
+		local style = STATUS_STYLE[mission.Status] or STATUS_STYLE.Active
+		local card = UIKit.frame(list, mission.Id, UDim2.fromScale(1, 0), Theme.PanelAlt)
+		card.AutomaticSize = Enum.AutomaticSize.Y
+		card.LayoutOrder = index
+		UIKit.corner(card, 10)
+		UIKit.padding(card, 8)
+		UIKit.list(card, 4)
+
+		local title = UIKit.label(
+			card,
+			`{style.Icon} <b>{UIKit.escape(mission.Title)}</b>  <font color="{UIKit.hex(Theme.Success)}">+{mission.Reward}</font>`,
+			17,
+			Theme.Font,
+			Theme.Ink
+		)
+		title.LayoutOrder = 1
+		UIKit.label(card, UIKit.escape(mission.Description), 15, Theme.Font, Theme.Ink).LayoutOrder = 2
+
+		local track = UIKit.frame(card, "Barra", UDim2.new(1, 0, 0, 8), Theme.Track)
+		track.LayoutOrder = 3
+		UIKit.corner(track, 4)
+		local fill = UIKit.frame(track, "Progresso", UDim2.fromScale(math.clamp(mission.Progress / math.max(mission.Goal, 1), 0, 1), 1), style.Color)
+		UIKit.corner(fill, 4)
+
+		local statusText = `{UIKit.escape(mission.ProgressText)} · {style.Text}`
+		local status = UIKit.label(card, statusText, 14, Theme.FontBold, style.Color)
+		status.LayoutOrder = 4
+		local expiresAt = mission.ExpiresAt
+		if mission.Status == "Active" and expiresAt then
+			table.insert(countdowns, { Label = status, Text = statusText, ExpiresAt = expiresAt })
+		end
+		if mission.Status == "Active" then
+			UIKit.label(card, UIKit.escape(mission.FailText), 13, Theme.Font, Theme.InkSoft).LayoutOrder = 5
+		end
+	end
+
+	updateHeader()
+	panel.Visible = #missions > 0
+end
+
+function MissionController.ApplyMissions(views: { Types.MissionView })
+	missions = views
+	render()
+end
+
+function MissionController.Start()
+	header.Activated:Connect(function()
+		collapsed = not collapsed
+		updateHeader()
+	end)
+	Remotes.MissionUpdate.OnClientEvent:Connect(MissionController.ApplyMissions)
+
+	-- prazo das missões com tempo limite (o servidor é quem realmente decide a falha)
+	task.spawn(function()
+		while true do
+			local now = workspace:GetServerTimeNow()
+			for _, countdown in countdowns do
+				countdown.Label.Text = `{countdown.Text} · ⏱ {UIKit.formatTime(countdown.ExpiresAt - now)}`
+			end
+			task.wait(0.5)
+		end
+	end)
+end
+
+return MissionController
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="31">
+          <Properties>
+            <string name="Name">UIController</string>
+            <string name="Source"><![CDATA[--!strict
+-- HUD principal: fase e relógio, status do lobby, disfarce atual, avisos, falas dos moradores
+-- e tela de resultado. Só apresenta o que o servidor manda; não decide nada do jogo.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local GameConfig = require(Shared:WaitForChild("Config"):WaitForChild("GameConfig"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local Types = require(Shared:WaitForChild("Types"))
+local UIKit = require(script.Parent.Parent:WaitForChild("UI"):WaitForChild("UIKit"))
+
+local Theme = UIKit.Theme
+
+local UIController = {}
+
+local PHASE_TITLES: { [string]: string } = {
+	Lobby = "LOBBY",
+	Intermission = "PREPARE-SE",
+	Preparing = "PREPARANDO O BAIRRO",
+	Playing = "PARTIDA EM ANDAMENTO",
+	Results = "FIM DE RODADA",
+}
+local NOTIFY_COLORS: { [string]: Color3 } = {
+	Info = Theme.Info,
+	Success = Theme.Success,
+	Warning = Theme.Danger,
+}
+local STATUS_ICONS: { [string]: string } = {
+	Completed = "✅",
+	Failed = "❌",
+	Cancelled = "➖",
+	Active = "⏳",
+}
+local MAX_TOASTS = 4
+local TOAST_TIME = 5
+local DIALOGUE_TIME = 5
+
+local inRound = false
+local residentName: string? = nil
+local toastCount = 0
+local dialogueToken = 0
+
+---------------------------------------------------------------------------
+-- Construção
+---------------------------------------------------------------------------
+
+local hud = UIKit.screen("MainUI", 1)
+
+local topBar = UIKit.frame(hud, "TopBar", UDim2.fromOffset(400, 66), Theme.Panel)
+topBar.AnchorPoint = Vector2.new(0.5, 0)
+topBar.Position = UDim2.new(0.5, 0, 0, 8)
+UIKit.corner(topBar, 16)
+UIKit.stroke(topBar, Theme.Ink, 2)
+UIKit.scaled(topBar)
+
+local phaseLabel = UIKit.label(topBar, "", 14, Theme.FontBold, Theme.Accent)
+phaseLabel.AutomaticSize = Enum.AutomaticSize.None
+phaseLabel.Position = UDim2.fromOffset(16, 8)
+phaseLabel.Size = UDim2.new(1, -130, 0, 16)
+
+local statusLabel = UIKit.label(topBar, "", 16, Theme.Font, Theme.Ink)
+statusLabel.AutomaticSize = Enum.AutomaticSize.None
+statusLabel.Position = UDim2.fromOffset(16, 25)
+statusLabel.Size = UDim2.new(1, -130, 0, 36)
+statusLabel.TextYAlignment = Enum.TextYAlignment.Top
+
+local timerLabel = UIKit.label(topBar, "", 32, Theme.FontTitle, Theme.Ink)
+timerLabel.AutomaticSize = Enum.AutomaticSize.None
+timerLabel.AnchorPoint = Vector2.new(1, 0.5)
+timerLabel.Position = UDim2.new(1, -16, 0.5, 0)
+timerLabel.Size = UDim2.fromOffset(110, 44)
+timerLabel.TextXAlignment = Enum.TextXAlignment.Right
+
+-- filho da barra do topo: escala junto e fica sempre logo abaixo dela
+local identityPill = UIKit.frame(topBar, "Disfarce", UDim2.fromOffset(0, 32), Theme.Ink)
+identityPill.AutomaticSize = Enum.AutomaticSize.X
+identityPill.AnchorPoint = Vector2.new(0.5, 0)
+identityPill.Position = UDim2.new(0.5, 0, 1, 8)
+identityPill.Visible = false
+UIKit.corner(identityPill, 16)
+local identityLabel = UIKit.label(identityPill, "", 16, Theme.Font, Theme.White)
+identityLabel.AutomaticSize = Enum.AutomaticSize.X
+identityLabel.Size = UDim2.fromScale(0, 1)
+identityLabel.TextWrapped = false
+local identityPadding = Instance.new("UIPadding")
+identityPadding.PaddingLeft = UDim.new(0, 14)
+identityPadding.PaddingRight = UDim.new(0, 14)
+identityPadding.Parent = identityPill
+
+local toastList = UIKit.frame(hud, "Avisos", UDim2.fromOffset(300, 0))
+toastList.AnchorPoint = Vector2.new(1, 0)
+toastList.Position = UDim2.new(1, -12, 0, 84)
+toastList.AutomaticSize = Enum.AutomaticSize.Y
+UIKit.list(toastList, 8)
+UIKit.scaled(toastList)
+
+local dialogue = UIKit.frame(hud, "Fala", UDim2.fromOffset(460, 0), Theme.Panel)
+dialogue.AnchorPoint = Vector2.new(0.5, 1)
+dialogue.Position = UDim2.new(0.5, 0, 1, -24)
+dialogue.AutomaticSize = Enum.AutomaticSize.Y
+dialogue.Visible = false
+UIKit.corner(dialogue, 14)
+UIKit.stroke(dialogue, Theme.Accent, 3)
+UIKit.padding(dialogue, 12)
+UIKit.list(dialogue, 4)
+UIKit.scaled(dialogue)
+local speakerLabel = UIKit.label(dialogue, "", 18, Theme.FontTitle, Theme.Accent)
+local lineLabel = UIKit.label(dialogue, "", 18, Theme.Font, Theme.Ink)
+lineLabel.LayoutOrder = 1
+
+-- Resultado: ScreenGui separado com fundo escurecido
+local resultsGui = UIKit.screen("ResultsUI", 10)
+resultsGui.Enabled = false
+local backdrop = UIKit.frame(resultsGui, "Fundo", UDim2.fromScale(1, 1), Color3.new(0, 0, 0))
+backdrop.BackgroundTransparency = 0.45
+
+local card = UIKit.frame(resultsGui, "Cartao", UDim2.fromOffset(520, 470), Theme.Panel)
+card.AnchorPoint = Vector2.new(0.5, 0.5)
+card.Position = UDim2.fromScale(0.5, 0.5)
+UIKit.corner(card, 20)
+UIKit.stroke(card, Theme.Ink, 3)
+UIKit.scaled(card)
+
+local resultTitle = UIKit.label(card, "", 34, Theme.FontTitle, Theme.Accent)
+resultTitle.AutomaticSize = Enum.AutomaticSize.None
+resultTitle.Size = UDim2.new(1, -40, 0, 44)
+resultTitle.Position = UDim2.fromOffset(20, 14)
+resultTitle.TextXAlignment = Enum.TextXAlignment.Center
+
+local resultBody = Instance.new("ScrollingFrame")
+resultBody.Name = "Conteudo"
+resultBody.BackgroundTransparency = 1
+resultBody.BorderSizePixel = 0
+resultBody.Position = UDim2.fromOffset(20, 64)
+resultBody.Size = UDim2.new(1, -40, 1, -128)
+resultBody.CanvasSize = UDim2.new()
+resultBody.AutomaticCanvasSize = Enum.AutomaticSize.Y
+resultBody.ScrollBarThickness = 6
+resultBody.ScrollBarImageColor3 = Theme.InkSoft
+resultBody.Parent = card
+UIKit.list(resultBody, 6)
+
+local closeButton = UIKit.button(card, "Fechar", Theme.Accent)
+closeButton.AnchorPoint = Vector2.new(0.5, 1)
+closeButton.Position = UDim2.new(0.5, 0, 1, -14)
+closeButton.Size = UDim2.fromOffset(180, 42)
+closeButton.Activated:Connect(function()
+	resultsGui.Enabled = false
+end)
+
+---------------------------------------------------------------------------
+-- Comportamento
+---------------------------------------------------------------------------
+
+local function statusText(phase: string, remaining: number): string
+	if phase == "Lobby" then
+		local count = #Players:GetPlayers()
+		if count < GameConfig.MinPlayers then
+			return `Aguardando jogadores ({count}/{GameConfig.MinPlayers})`
+		end
+		return "Preparando a próxima partida..."
+	elseif phase == "Intermission" then
+		return `A partida começa em {math.max(0, math.ceil(remaining))}s`
+	elseif phase == "Preparing" then
+		return "Distribuindo disfarces..."
+	elseif phase == "Playing" then
+		if inRound then
+			return "Cumpra suas missões sem chamar atenção!"
+		end
+		return "Partida em andamento. Você entra na próxima!"
+	end
+	return "Veja quem era quem!"
+end
+
+local function refresh()
+	local phase = (Remotes.GameState:GetAttribute("Phase") :: string?) or "Lobby"
+	local endsAt = (Remotes.GameState:GetAttribute("PhaseEndsAt") :: number?) or 0
+	local remaining = if endsAt > 0 then endsAt - workspace:GetServerTimeNow() else 0
+	phaseLabel.Text = PHASE_TITLES[phase] or phase
+	statusLabel.Text = statusText(phase, remaining)
+	timerLabel.Text = if endsAt > 0 then UIKit.formatTime(remaining) else ""
+	timerLabel.TextColor3 = if phase == "Playing" and remaining <= 30 then Theme.Danger else Theme.Ink
+	identityPill.Visible = inRound and residentName ~= nil
+	if phase == "Lobby" and resultsGui.Enabled then
+		resultsGui.Enabled = false
+	end
+end
+
+local function fadeIn(card: Frame, label: TextLabel, stroke: UIStroke)
+	card.BackgroundTransparency = 1
+	label.TextTransparency = 1
+	stroke.Transparency = 1
+	local info = TweenInfo.new(0.25)
+	TweenService:Create(card, info, { BackgroundTransparency = 0 }):Play()
+	TweenService:Create(label, info, { TextTransparency = 0 }):Play()
+	TweenService:Create(stroke, info, { Transparency = 0 }):Play()
+end
+
+local function toast(kind: string, text: string, title: string?)
+	toastCount += 1
+	local color = NOTIFY_COLORS[kind] or Theme.Info
+	local toastCard = UIKit.frame(toastList, "Aviso", UDim2.fromScale(1, 0), Theme.Panel)
+	toastCard.AutomaticSize = Enum.AutomaticSize.Y
+	toastCard.LayoutOrder = -toastCount -- o mais novo fica em cima
+	UIKit.corner(toastCard, 12)
+	UIKit.padding(toastCard, 10)
+	local stroke = UIKit.stroke(toastCard, color, 2)
+	local body = UIKit.escape(text)
+	local label = UIKit.label(toastCard, if title then `<b>{UIKit.escape(title)}</b>\n{body}` else body, 16, Theme.Font, Theme.Ink)
+	fadeIn(toastCard, label, stroke)
+
+	local cards = {}
+	for _, child in toastList:GetChildren() do
+		if child:IsA("Frame") then
+			table.insert(cards, child)
+		end
+	end
+	table.sort(cards, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
+	end)
+	for i = MAX_TOASTS + 1, #cards do
+		cards[i]:Destroy()
+	end
+
+	task.delay(TOAST_TIME, function()
+		if toastCard.Parent then
+			toastCard:Destroy()
+		end
+	end)
+end
+
+local function showDialogue(speaker: string, line: string)
+	dialogueToken += 1
+	local token = dialogueToken
+	speakerLabel.Text = UIKit.escape(speaker)
+	lineLabel.Text = `“{UIKit.escape(line)}”`
+	dialogue.Visible = true
+	task.delay(DIALOGUE_TIME, function()
+		if token == dialogueToken then
+			dialogue.Visible = false
+		end
+	end)
+end
+
+local function section(title: string, order: number): number
+	local label = UIKit.label(resultBody, `<b>{title}</b>`, 18, Theme.FontBold, Theme.Accent)
+	label.LayoutOrder = order
+	return order + 1
+end
+
+local function line(text: string, order: number, color: Color3?): number
+	local label = UIKit.label(resultBody, text, 16, Theme.Font, color or Theme.Ink)
+	label.LayoutOrder = order
+	return order + 1
+end
+
+local function showResult(result: Types.RoundResult)
+	for _, child in resultBody:GetChildren() do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+
+	resultTitle.Text = if result.Participated and result.Won then "VITÓRIA!" else "FIM DE RODADA"
+	resultTitle.TextColor3 = if result.Participated and result.Won then Theme.Success else Theme.Accent
+
+	local order = line(UIKit.escape(result.Reason), 1, Theme.InkSoft)
+	if result.Participated then
+		order = line(`Você era <b>{UIKit.escape(result.ResidentName or "?")}</b>.`, order)
+		order = section("Suas missões", order)
+		for _, mission in result.Missions do
+			order = line(`{STATUS_ICONS[mission.Status] or "•"} {UIKit.escape(mission.Title)}`, order)
+		end
+		order = section(`+{result.Earned} Fichas do Bairro`, order)
+		for _, entry in result.Breakdown do
+			order = line(`{UIKit.escape(entry.Label)}: +{entry.Amount}`, order, Theme.InkSoft)
+		end
+	else
+		order = line("Você assistiu do lobby. Entre na próxima partida!", order)
+	end
+
+	order = section("Quem era quem?", order)
+	for _, entry in result.Reveal do
+		local who = if entry.PlayerName
+			then `<font color="{UIKit.hex(Theme.Info)}">Jogador: {UIKit.escape(entry.PlayerName)}</font>`
+			else `<font color="{UIKit.hex(Theme.InkSoft)}">NPC 🤖</font>`
+		order = line(`<b>{UIKit.escape(entry.ResidentName)}</b> — {who}`, order)
+	end
+
+	resultBody.CanvasPosition = Vector2.zero
+	resultsGui.Enabled = true
+end
+
+function UIController.ApplyPlayerState(state: Types.PlayerState)
+	inRound = state.InRound
+	residentName = state.ResidentName
+	identityLabel.Text = if state.ResidentName then `Seu disfarce: <b>{UIKit.escape(state.ResidentName)}</b>` else ""
+	refresh()
+end
+
+function UIController.Start()
+	Remotes.Notify.OnClientEvent:Connect(function(kind: string, text: string, title: string?)
+		if kind == "Dialogue" then
+			showDialogue(title or "", text)
+		else
+			toast(kind, text, title)
+		end
+	end)
+	Remotes.PlayerState.OnClientEvent:Connect(UIController.ApplyPlayerState)
+	Remotes.RoundResult.OnClientEvent:Connect(showResult)
+
+	task.spawn(function()
+		while true do
+			refresh()
+			task.wait(0.25)
+		end
+	end)
+end
+
+return UIController
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Folder" referent="32">
+        <Properties>
+          <string name="Name">UI</string>
+        </Properties>
+        <Item class="ModuleScript" referent="33">
+          <Properties>
+            <string name="Name">UIKit</string>
+            <string name="Source"><![CDATA[--!strict
+-- Peças de interface reutilizáveis: tema, criadores tipados e escala automática para telas pequenas.
+-- Cada painel recebe o próprio UIScale (UIKit.scaled), assim fundos de tela cheia não encolhem.
+
+local Players = game:GetService("Players")
+
+local UIKit = {}
+
+UIKit.Theme = {
+	Panel = Color3.fromRGB(255, 249, 237),
+	PanelAlt = Color3.fromRGB(255, 238, 209),
+	Track = Color3.fromRGB(232, 222, 202),
+	Ink = Color3.fromRGB(45, 42, 62),
+	InkSoft = Color3.fromRGB(110, 106, 130),
+	Accent = Color3.fromRGB(255, 133, 64),
+	Success = Color3.fromRGB(38, 186, 153),
+	Danger = Color3.fromRGB(232, 72, 85),
+	Info = Color3.fromRGB(72, 149, 239),
+	White = Color3.new(1, 1, 1),
+	Font = Enum.Font.BuilderSans,
+	FontBold = Enum.Font.BuilderSansBold,
+	FontTitle = Enum.Font.FredokaOne,
+}
+
+-- Referência de layout: 1100x620. Celular fica em ~0.75 para o texto continuar legível.
+local MIN_SCALE, MAX_SCALE = 0.75, 1.2
+local scales: { UIScale } = {}
+local hookedCamera: Camera? = nil
+
+local function refreshScales()
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local viewport = camera.ViewportSize
+	local value = math.clamp(math.min(viewport.X / 1100, viewport.Y / 620), MIN_SCALE, MAX_SCALE)
+	for _, scale in scales do
+		scale.Scale = value
+	end
+end
+
+local function hookCamera()
+	local camera = workspace.CurrentCamera
+	if camera and camera ~= hookedCamera then
+		hookedCamera = camera
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(refreshScales)
+	end
+	refreshScales()
+end
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(hookCamera)
+
+function UIKit.scaled(target: GuiObject)
+	local scale = Instance.new("UIScale")
+	scale.Parent = target
+	table.insert(scales, scale)
+	hookCamera()
+end
+
+function UIKit.isSmallScreen(): boolean
+	local camera = workspace.CurrentCamera
+	return camera ~= nil and camera.ViewportSize.Y < 500
+end
+
+function UIKit.screen(name: string, displayOrder: number): ScreenGui
+	local gui = Instance.new("ScreenGui")
+	gui.Name = name
+	gui.ResetOnSpawn = false -- o jogador renasce ao entrar/sair da partida
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = displayOrder
+	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	return gui
+end
+
+function UIKit.frame(parent: Instance, name: string, size: UDim2, color: Color3?): Frame
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.Size = size
+	frame.BorderSizePixel = 0
+	if color then
+		frame.BackgroundColor3 = color
+	else
+		frame.BackgroundTransparency = 1
+	end
+	frame.Parent = parent
+	return frame
+end
+
+-- Texto com quebra de linha que cresce na vertical; RichText ligado (use UIKit.escape em textos externos)
+function UIKit.label(parent: Instance, text: string, textSize: number, font: Enum.Font?, color: Color3?): TextLabel
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.Font = font or UIKit.Theme.Font
+	label.TextSize = textSize
+	label.TextColor3 = color or UIKit.Theme.Ink
+	label.TextWrapped = true
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.RichText = true
+	label.Text = text
+	label.Parent = parent
+	return label
+end
+
+function UIKit.button(parent: Instance, text: string, color: Color3): TextButton
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, 0, 0, 40)
+	button.BackgroundColor3 = color
+	button.AutoButtonColor = true -- escurece ao passar o mouse/tocar
+	button.Font = UIKit.Theme.FontBold
+	button.TextSize = 18
+	button.TextColor3 = UIKit.Theme.White
+	button.Text = text
+	button.Parent = parent
+	UIKit.corner(button, 10)
+	return button
+end
+
+function UIKit.corner(parent: Instance, radius: number)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = parent
+end
+
+function UIKit.stroke(parent: Instance, color: Color3, thickness: number): UIStroke
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color
+	stroke.Thickness = thickness
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = parent
+	return stroke
+end
+
+function UIKit.padding(parent: Instance, pixels: number)
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, pixels)
+	padding.PaddingBottom = UDim.new(0, pixels)
+	padding.PaddingLeft = UDim.new(0, pixels)
+	padding.PaddingRight = UDim.new(0, pixels)
+	padding.Parent = parent
+end
+
+function UIKit.list(parent: Instance, spacing: number): UIListLayout
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, spacing)
+	layout.Parent = parent
+	return layout
+end
+
+function UIKit.escape(text: string): string
+	return (text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
+end
+
+function UIKit.hex(color: Color3): string
+	return "#" .. color:ToHex()
+end
+
+function UIKit.formatTime(seconds: number): string
+	local whole = math.max(0, math.ceil(seconds))
+	return string.format("%d:%02d", whole // 60, whole % 60)
+end
+
+return UIKit
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
